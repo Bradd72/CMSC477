@@ -58,9 +58,10 @@ if __name__ == '__main__':
     ep_robot.initialize(conn_type="ap")
     ep_chassis = ep_robot.chassis
 
-    x_val = 0.5
-    y_val = 0
-    z_val = 30
+    x_offset = .35
+    y_offset = 0
+
+    speed_constant = 1
 
     ep_camera = ep_robot.camera
     ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
@@ -86,9 +87,20 @@ if __name__ == '__main__':
                 img = cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=5)
                 cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
 
-                print(pose)
+                # print(pose)
                 
-                ep_chassis.move(x=pose[0][0]-x_val, y=pose[0][1]-y_val, z=0, xy_speed=0.7, z_speed=45).wait_for_completed()
+
+                x_val =  pose[0][2] - x_offset
+                y_val =  pose[0][0] - y_offset
+                angle =  np.rad2deg(np.arctan2(y_val,x_val))
+                if abs(angle)>15 and x_val>.05:
+                    z_val = angle*speed_constant
+                    y_val = 0
+                else:
+                    z_val=0
+
+                ep_chassis.drive_speed(x=x_val*speed_constant, y=y_val*speed_constant, z=z_val,timeout=1)
+                print("{} {}".format(x_val,y_val))
 
             cv2.imshow("img", img)
             cv2.waitKey(10)
