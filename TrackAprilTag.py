@@ -61,7 +61,14 @@ if __name__ == '__main__':
     x_offset = .35
     y_offset = 0
 
-    speed_constant = 1
+    K_p = 1.5
+    K_i = .15
+    K_d = .1
+
+    x_val=0
+    y_val=0
+    prog_time=time.time()
+    time_=prog_time
 
     ep_camera = ep_robot.camera
     ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
@@ -77,7 +84,7 @@ if __name__ == '__main__':
             K=np.array([[184.752, 0, 320], [0, 184.752, 180], [0, 0, 1]])
 
             results = at_detector.detect(gray, estimate_tag_pose=False)
-
+            
             for res in results:
                 pose = find_pose_from_tag(K, res)
                 rot, jaco = cv2.Rodrigues(pose[1], pose[1])
@@ -89,18 +96,38 @@ if __name__ == '__main__':
 
                 # print(pose)
                 
-
+                x_prev = x_val
+                y_prev = y_val
+                prev_time = time_
                 x_val =  pose[0][2] - x_offset
                 y_val =  pose[0][0] - y_offset
+                time_ = time.time()
+                time_step = time_ - prev_time
+                if time_step < .5:
+                    x_integrator+=x_val
+                    y_integrator+=y_val
+                    x_diff = (x_val - x_prev) / time_step
+                    y_diff = (y_val - y_prev) / time_step
+                else:
+                    x_integrator = 0
+                    y_integrator = 0
+                    x_diff = 0
+                    y_diff = 0
+                # if abs(x_integrator)>2:
+                #     x_integrator-=x_val
+                # if abs(y_integrator)>2:
+                #     y_integrator-=y_val
                 angle =  np.rad2deg(np.arctan2(y_val,x_val))
-                if abs(angle)>15 and x_val>.05:
-                    z_val = angle*speed_constant
+                if abs(angle)>15 and x_val>.2:
+                    z_val = angle
                     y_val = 0
                 else:
                     z_val=0
-
-                ep_chassis.drive_speed(x=x_val*speed_constant, y=y_val*speed_constant, z=z_val,timeout=1)
-                print("{} {}".format(x_val,y_val))
+                x_response = x_val*K_p + x_diff*K_d + x_integrator*K_i
+                y_response = y_val*K_p + y_diff*K_d + y_integrator*K_i
+                z_response = z_val*K_p
+                ep_chassis.drive_speed(x_response, y_response, z_response,timeout=.1)
+                print("pos: {},{} integrator {},{}  diff:{},{}".format(x_val*K_p,y_val*K_p,x_integrator*K_i,y_integrator*K_i,x_diff*K_d,y_diff*K_d))
 
             cv2.imshow("img", img)
             cv2.waitKey(10)
