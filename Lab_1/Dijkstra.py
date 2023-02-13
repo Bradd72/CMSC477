@@ -20,36 +20,42 @@ def Dijkstra(maze, s):
 
     depthCounter = 0    # number of nodes checked
 
+    queueflag = False;
+
     modifiedNodes = []  # Used in plotting
     modifiedNodeStatus = []
     pathEdges = {}
     while queue != []:
         depthCounter += 1
         currNode = queue.pop(0) # FIFO queue
+        currNode[2] = nodeDistances[currNode[0],currNode[1]]
         
         # Check surrounding 8 (or 4) nodes
-        for i in [[-1,-1,1.4142],[0,-1,1],[1,-1,1.4142],[-1,0,1],[1,0,1],[-1,1,1.4142],[0,1,1],[1,1,1.4142]]:  
+        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:  
         #for i in [[0,-1,1],[-1,0,1],[1,0,1],[0,1,1]]:  
-            #time.sleep(2)
             adjNode = [currNode[0]+i[0],currNode[1]+i[1],currNode[2]+i[2]]
+            print('[5,2] dist: {}'.format(nodeDistances[5,2]))
             # end node: quit
             if maze[adjNode[0],adjNode[1]] == 3:    
-                queue = []
-                pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
-                break    
+                queueflag = True;
+                if adjNode[2] < nodeDistances[adjNode[0],adjNode[1]]:
+                    nodeDistances[adjNode[0],adjNode[1]] = adjNode[2]
+                    pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
+                    break 
+                print('END---->>> ')   
             # open node: add to queue                           
             elif maze[adjNode[0],adjNode[1]] == 0:    
                 # Weighting fastest path
-                print('adjDist: {} | existingDist: {}'.format(adjNode[1], nodeDistances[adjNode[0],adjNode[1]]))
-                if adjNode[2] < nodeDistances[adjNode[0],adjNode[1]] or nodeDistances[adjNode[0],adjNode[1]] == 0:
+                if adjNode[2] < nodeDistances[adjNode[0],adjNode[1]]:
                     nodeDistances[adjNode[0],adjNode[1]] = adjNode[2]
-                    pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
-                    print('Path Updated')
+                    if queueflag == False:
+                        pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
+                    print('0 New edge {}: {} | New dist: {} | Old Dist: {}'.format([adjNode[0],adjNode[1]],[currNode[0],currNode[1]],adjNode[2],nodeDistances[adjNode[0],adjNode[1]]))
 
-                if queue == []:
+                if queue == [] and queueflag == False:
                     queue.append(adjNode)
                     maze[adjNode[0],adjNode[1]] = 4
-                else:
+                elif queueflag == False:
                     tn = 0
                     for entry in queue:
                         if adjNode[2] < entry[2]:
@@ -64,7 +70,15 @@ def Dijkstra(maze, s):
   
                 modifiedNodes.append([adjNode[0],adjNode[1]])   # Plotting stuff
                 modifiedNodeStatus.append(4)
-            
+
+            elif maze[adjNode[0],adjNode[1]] == 4:
+                if adjNode[2] < nodeDistances[adjNode[0],adjNode[1]]:
+                    print('4 New edge {}: {} | New dist: {} | Old Dist: {}'.format([adjNode[0],adjNode[1]],[currNode[0],currNode[1]],adjNode[2],nodeDistances[adjNode[0],adjNode[1]]))
+                    nodeDistances[adjNode[0],adjNode[1]] = adjNode[2]
+                    if queueflag == False:
+                        pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
+
+            print('Node: {} | Adj: {} | existingDist: {}'.format(currNode,adjNode,nodeDistances[adjNode[0],adjNode[1]]))
         maze[currNode[0],currNode[1]] = 5   # mark current as Visitied
         modifiedNodes.append([currNode[0],currNode[1]]) # Plotting stuff
         modifiedNodeStatus.append(5)
@@ -75,7 +89,8 @@ def Dijkstra(maze, s):
             modifiedNodes = []
             modifiedNodeStatus = []
 
-    shortestPath = [tuple([adjNode[0],adjNode[1]])]
+    #shortestPath = [tuple([adjNode[0],adjNode[1]])]
+    shortestPath = [tuple(list(pathEdges)[-1])]
     while True:
         if shortestPath[-1] in pathEdges:
             shortestPath.append(pathEdges[shortestPath[-1]])
@@ -88,12 +103,7 @@ def Dijkstra(maze, s):
     Plot_Search_Path(modifiedNodes, modifiedNodeStatus)
     #Draw_Maze_Innit(maze)
 
-    #for point in pathEdges:
-    #    ax.plot(point[1],height-point[0],'c.')
-    #    plt.pause(1e-10)
-
-    #drawTime = time.time()-calcTime-startTime
-    #print('Draw: {} seconds'.format(drawTime))
+    print(nodeDistances)
     return shortestPath
 
 def Draw_Maze_Innit(mazelist):
@@ -156,10 +166,10 @@ def PlotPath(path):
 
 
 if __name__ == '__main__':
-    mazeList = pd.read_csv("Labs\Lab1Map.csv", header=None).to_numpy()
+    mazeList = pd.read_csv("Homework 1\SmallMap.csv", header=None).to_numpy()
     
     height, width = mazeList.shape
-    nodeDistances = np.zeros(mazeList.shape, dtype=int)
+    nodeDistances = float(16384)*np.ones(mazeList.shape, dtype=int)
     start = np.where(mazeList==2)
     startLoc = np.array([start[0][0],start[1][0]])
 
