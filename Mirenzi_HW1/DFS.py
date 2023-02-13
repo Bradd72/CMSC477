@@ -3,12 +3,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
-DEPTH_MAX = 5000
+# DEPTH_MAX = 17174
+DEPTH_MAX = 10000
+depth=0
 Success = False
 sys.setrecursionlimit(DEPTH_MAX)
 
 def dfs(maze,posX,posY):
-    global Success
+    global Success, depth
     if Success:
         return
     if maze[posX,posY] == 1 or maze[posX,posY] == 4:
@@ -30,7 +32,7 @@ def dfs(maze,posX,posY):
 
 
 if __name__ == '__main__':
-    df = pandas.read_csv("C:/Users/jmire/Documents/VS_Code_Projects/CMSC477/CMSC477/Mirenzi_HW1/Map1.csv")
+    df = pandas.read_csv("C:/Users/jmire/Documents/VS_Code_Projects/CMSC477/CMSC477/Mirenzi_HW1/Map2.csv")
     maze = df.to_numpy()
     start_position = np.argwhere(maze == 2)[0]
     maze[start_position[0],start_position[1]] = 7

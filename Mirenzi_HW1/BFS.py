@@ -7,8 +7,8 @@ DEPTH_MAX = 50000
 sys.setrecursionlimit(DEPTH_MAX)
 goal_position = (0,0)
 
-def bfs(maze):
-    for step in range(1,10000):
+def bfs(maze,path):
+    for step in range(1,20000):
         bfs_step(maze,path,step)
         if path[goal_position[0],goal_position[1]] != 0:
             break
@@ -38,7 +38,7 @@ def bfs_step(maze,path,k):
                
 
 if __name__ == '__main__':
-    maze = pandas.read_csv("C:/Users/jmire/Documents/VS_Code_Projects/CMSC477/CMSC477/Mirenzi_HW1/Map1.csv").to_numpy()
+    maze = pandas.read_csv("C:/Users/jmire/Documents/VS_Code_Projects/CMSC477/CMSC477/Mirenzi_HW1/Map3.csv").to_numpy()
     path = np.zeros(maze.shape)
     fig, ax = plt.subplots(1,3)
     ax[0].pcolormesh(maze)
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     maze[goal_position[0],goal_position[1]] = 8
     
     path[start_position[0],start_position[1]] = 1
-    bfs_path,shortest_path = bfs(maze)
+    bfs_path,shortest_path = bfs(maze,path)
 
     
     ax[1].pcolormesh(bfs_path)
