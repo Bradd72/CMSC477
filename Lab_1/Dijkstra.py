@@ -10,7 +10,6 @@ import time
 # 4 = Queued
 # 5 = Visited
 # 6 = Found Path
-# 7 = Wall Boundary
 # [x, y, distance]
 
 def Dijkstra(maze, s):
@@ -32,7 +31,7 @@ def Dijkstra(maze, s):
         currNode[2] = nodeDistances[currNode[0],currNode[1]]
         
         # Check surrounding 8 (or 4) nodes
-        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:
+        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:  
         #for i in [[0,-1,1],[-1,0,1],[1,0,1],[0,1,1]]:  
             adjNode = [currNode[0]+i[0],currNode[1]+i[1],currNode[2]+i[2]]
             # end node: quit
@@ -105,8 +104,6 @@ def Draw_Maze_Innit(mazelist):
     ax.cla()
     nodeWallx = []
     nodeWally = []
-    nodeBoundx = []
-    nodeBoundy = []
     rowCounter = 0
     entryCounter = 0
     for row in mazelist:
@@ -129,7 +126,7 @@ def Draw_Maze_Innit(mazelist):
             entryCounter += 1
         rowCounter += 1
         entryCounter = 0
-    # plt.scatter(nodeWallx,nodeWally,c='k',marker=',')
+    plt.scatter(nodeWallx,nodeWally,c='k',marker=',')
     ax.axis('equal')
     plt.pause(1e-10)
     return
@@ -174,7 +171,7 @@ def ExpandWalls(maze):
     return
 
 if __name__ == '__main__':
-    mazeList = pd.read_csv("Labs\Lab_1\Lab1Map.csv", header=None).to_numpy()
+    mazeList = pd.read_csv("Lab_1\Lab1Map.csv", header=None).to_numpy()
     
     height, width = mazeList.shape
     nodeDistances = float(16384)*np.ones(mazeList.shape, dtype=int)
