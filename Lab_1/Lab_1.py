@@ -10,6 +10,8 @@ import time
 # 4 = Queued
 # 5 = Visited
 # 6 = Found Path
+# 7 = Wall Boundary
+# 8 = Robot
 # [x, y, distance]
 
 def Dijkstra(maze, s):
@@ -18,21 +20,14 @@ def Dijkstra(maze, s):
     maze[s[0],s[1]] = 4 
     nodeDistances[s[0],s[1]] = s[2]
 
-    depthCounter = 0    # number of nodes checked
-
     queueflag = False;
-
-    modifiedNodes = []  # Used in plotting
-    modifiedNodeStatus = []
     pathEdges = {}
     while queue != []:
-        depthCounter += 1
         currNode = queue.pop(0) # FIFO queue
         currNode[2] = nodeDistances[currNode[0],currNode[1]]
         
-        # Check surrounding 8 (or 4) nodes
-        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:  
-        #for i in [[0,-1,1],[-1,0,1],[1,0,1],[0,1,1]]:  
+        # Check surrounding 8 nodes
+        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:   
             adjNode = [currNode[0]+i[0],currNode[1]+i[1],currNode[2]+i[2]]
             # end node: quit
             if maze[adjNode[0],adjNode[1]] == 3:    
@@ -63,9 +58,6 @@ def Dijkstra(maze, s):
                             maze[adjNode[0],adjNode[1]] = 4
                             break
                         tn += 1
-  
-                modifiedNodes.append([adjNode[0],adjNode[1]])   # Plotting stuff
-                modifiedNodeStatus.append(4)
 
             elif maze[adjNode[0],adjNode[1]] == 4:
                 if adjNode[2] < nodeDistances[adjNode[0],adjNode[1]]:
@@ -73,81 +65,19 @@ def Dijkstra(maze, s):
                     if queueflag == False:
                         pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
 
-        maze[currNode[0],currNode[1]] = 5   # mark current as Visitied
-        modifiedNodes.append([currNode[0],currNode[1]]) # Plotting stuff
-        modifiedNodeStatus.append(5)
-                
-        if depthCounter%100 == 0:
-            Plot_Search_Path(modifiedNodes, modifiedNodeStatus)
-            #Draw_Maze_Innit(maze)
-            modifiedNodes = []
-            modifiedNodeStatus = []
+        maze[currNode[0],currNode[1]] = 5   # mark current as Visitied                
 
-    #shortestPath = [tuple([adjNode[0],adjNode[1]])]
     shortestPath = [tuple(list(pathEdges)[-1])]
     while True:
-        if shortestPath[-1] in pathEdges:
-            shortestPath.append(pathEdges[shortestPath[-1]])
+        if shortestPath[0] in pathEdges:
+            shortestPath.insert(0,pathEdges[shortestPath[0]])
         else:
             break
 
     calcTime = time.time()-startTime
     print('Search: {} seconds'.format(calcTime))
-    print('Nodes Visisted: {}'.format(depthCounter))
-    
-    Plot_Search_Path(modifiedNodes, modifiedNodeStatus)
-    #Draw_Maze_Innit(maze)
+
     return shortestPath
-
-def Draw_Maze_Innit(mazelist):
-    # Loop over all points in maze
-    ax.cla()
-    nodeWallx = []
-    nodeWally = []
-    rowCounter = 0
-    entryCounter = 0
-    for row in mazelist:
-        for entry in row:       
-            # Plotting maze outline and POI
-            if entry == 1:      # Obstacle
-                # nodeWallx.append(entryCounter)
-                # nodeWally.append(height-rowCounter)
-                ax.plot(entryCounter, height-rowCounter, 'ks')
-            elif entry == 7:    # Wall Boundary
-                ax.plot(entryCounter, height-rowCounter, c='#9c9c9c', marker='s')
-            elif entry == 2:    # Start
-                ax.plot(entryCounter, height-rowCounter, 'bo')
-            elif entry == 3:    # End
-                ax.plot(entryCounter, height-rowCounter, 'go')
-            elif entry == 4:    # Queued
-                ax.plot(entryCounter, height-rowCounter, 'm.')
-            elif entry == 5:    # Visited
-                ax.plot(entryCounter, height-rowCounter, 'c.')
-            entryCounter += 1
-        rowCounter += 1
-        entryCounter = 0
-    plt.scatter(nodeWallx,nodeWally,c='k',marker=',')
-    ax.axis('equal')
-    plt.pause(1e-10)
-    return
-
-def Plot_Search_Path(points, stati):    
-    nodeQx = []
-    nodeQy = []
-    nodeVx = []
-    nodeVy = []
-    for nodeNum in range(len(points)):
-        if stati[nodeNum] == 4:    # Queued
-            nodeQx.append(points[nodeNum][1])
-            nodeQy.append(height-points[nodeNum][0])
-        elif stati[nodeNum] == 5:    # Visited          
-            nodeVx.append(points[nodeNum][1])
-            nodeVy.append(height-points[nodeNum][0])
-
-    plt.scatter(nodeQx,nodeQy,c='m',marker='.')
-    plt.scatter(nodeVx,nodeVy,c='c',marker='.')
-    plt.pause(1e-10)
-    return
 
 def PlotPath(path):
     xcoords = []
@@ -160,6 +90,9 @@ def PlotPath(path):
     return
 
 def ExpandWalls(maze):
+    '''
+    Creates a 1 unit wide boundary around the known walls
+    '''
     for h in range(height-1):
         for w in range(width-1):
             if maze[h,w] == 1:
@@ -170,25 +103,95 @@ def ExpandWalls(maze):
                         maze[h+i[0],w+i[1]] = 7
     return
 
+def Draw_Maze(mazelist):
+    startTime = time.time()
+    # Loop over all points in maze
+    Wallx = []
+    Wally = []
+    Boundx = []
+    Boundy = []
+    rowCounter = 0
+    entryCounter = 0
+    for row in mazelist:
+        for entry in row:       
+            # Plotting maze outline and POI
+            if entry == 1:      # Obstacle
+                Wallx.append(entryCounter)
+                Wally.append(height-rowCounter)
+            elif entry == 7:    # Wall Boundary
+                Boundx.append(entryCounter)
+                Boundy.append(height-rowCounter)
+            elif entry == 2:    # Start
+                ax.plot(entryCounter, height-rowCounter, 'bo')
+            elif entry == 3:    # End
+                ax.plot(entryCounter, height-rowCounter, 'go')
+            entryCounter += 1
+        rowCounter += 1
+        entryCounter = 0
+    plt.scatter(Wallx,Wally,c='k',marker='s')
+    plt.scatter(Boundx,Boundy,c='#9c9c9c',marker='s')
+
+    ax.axis('equal')
+    ax.grid()
+    ax.set_xticks(range(0, width))
+    ax.set_xticklabels(range(1, width+1))
+    ax.set_yticks(range(0, height))
+    ax.set_yticklabels(range(1, height+1))
+    calcTime = time.time()-startTime
+    print('Plot: {} seconds'.format(calcTime))
+    plt.pause(1e-10)
+    return
+
 if __name__ == '__main__':
+    # FOR INITIAL LAB WORK, KNOWN ENVIRONMENT
+    '''
+    - init maze
+    - determine current location in maze
+        - Apriltag distances give relative location
+        - Apriltag id gives location in map
+    - solve path
+    - follow path
+        - FIND A WAY TO DETERMINE NEXT POINTS/PATH
+        - interpolate between next point to find desired location given a certain time or velocity between
+        - PID controller to move robot to point moving in space (in time!)
+            - Use other apriltags to determine position in maze and calculate error offset
+    '''
+    # Init maze
     mazeList = pd.read_csv("Lab_1\Lab1Map.csv", header=None).to_numpy()
-    
     height, width = mazeList.shape
     nodeDistances = float(16384)*np.ones(mazeList.shape, dtype=int)
     start = np.where(mazeList==2)
     startLoc = np.array([start[0][0],start[1][0]])
-
     # Start interactive plot
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
-
     ExpandWalls(mazeList)
-    Draw_Maze_Innit(mazeList)
-    time.sleep(1)
-    shortestPath = Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+    Draw_Maze(mazeList)
+
+    # Determine current location in maze
+    robotLoc = startLoc
+    
+    # Solve Path
+    shortestPath = Dijkstra(mazeList, [robotLoc[0],robotLoc[1],0])
+    print(shortestPath)
     PlotPath(shortestPath)
+
+    # Follow Path
+
 
     # Keeping the updating plot open
     while True:
         plt.pause(10)
+
+
+    # FOR BONUS, UNKNOWN ENVIRONMENT
+    '''
+    - init BLANK maze with start and end
+    - look for apriltag to get current robot position in maze
+        - if one exists mark that location as a wall in the maze and get relative position
+        - if one does not exist, assume at start
+        - solve a-star from current location to get path
+    - follow path until new wall is found
+        - update map with wall and resolve a-star
+    '''
