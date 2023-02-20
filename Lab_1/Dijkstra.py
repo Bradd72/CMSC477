@@ -117,7 +117,7 @@ def Draw_Maze_Innit(mazelist):
                 # nodeWally.append(height-rowCounter)
                 ax.plot(entryCounter, height-rowCounter, 'ks')
             elif entry == 7:    # Wall Boundary
-                ax.plot(entryCounter, height-rowCounter, 'gs')
+                ax.plot(entryCounter, height-rowCounter, c='#9c9c9c', marker='s')
             elif entry == 2:    # Start
                 ax.plot(entryCounter, height-rowCounter, 'bo')
             elif entry == 3:    # End
@@ -163,12 +163,14 @@ def PlotPath(path):
     return
 
 def ExpandWalls(maze):
-    for h in len(height):
-        for w in len(width):
+    for h in range(height-1):
+        for w in range(width-1):
             if maze[h,w] == 1:
+                if h == 0 or w == 0:
+                    continue
                 for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:
-                    maze[h+i[0],w+i[1]] = 7
-
+                    if maze[h+i[0],w+i[1]] == 0:
+                        maze[h+i[0],w+i[1]] = 7
     return
 
 if __name__ == '__main__':
@@ -184,6 +186,7 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
 
+    ExpandWalls(mazeList)
     Draw_Maze_Innit(mazeList)
     time.sleep(1)
     shortestPath = Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
