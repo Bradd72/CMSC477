@@ -86,16 +86,17 @@ def PlotPath(path):
         ycoords.append(height-node[0])
         xcoords.append(node[1])
 
-    plt.plot(xcoords,ycoords,'r-')
+    plt.plot(xcoords,ycoords,'r:')
+    plt.pause(1e-10)
     return
 
 def ExpandWalls(maze):
     '''
-    Creates a 1 unit wide boundary around the known walls
+    Creates a 1 unit wide boundary around all known walls
     '''
     for h in range(height-1):
         for w in range(width-1):
-            if maze[h,w] == 1:
+            if maze[h,w] == 1: # Wall
                 if h == 0 or w == 0:
                     continue
                 for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:
@@ -103,7 +104,7 @@ def ExpandWalls(maze):
                         maze[h+i[0],w+i[1]] = 7
     return
 
-def Draw_Maze(mazelist):
+def Draw_Maze(mazelist, grid=0):
     startTime = time.time()
     # Loop over all points in maze
     Wallx = []
@@ -132,29 +133,67 @@ def Draw_Maze(mazelist):
     plt.scatter(Boundx,Boundy,c='#9c9c9c',marker='s')
 
     ax.axis('equal')
-    ax.grid()
-    ax.set_xticks(range(0, width))
-    ax.set_xticklabels(range(1, width+1))
-    ax.set_yticks(range(0, height))
-    ax.set_yticklabels(range(1, height+1))
+    if grid == 1:
+        ax.grid()
+        ax.set_xticks(range(0, width))
+        ax.set_xticklabels(range(1, width+1))
+        ax.set_yticks(range(0, height))
+        ax.set_yticklabels(range(1, height+1))
     calcTime = time.time()-startTime
     print('Plot: {} seconds'.format(calcTime))
     plt.pause(1e-10)
     return
 
+def FollowPath(shortestPath,robotLoc):
+    pathDes = shortestPath
+    timeConst = 0.5 # seconds between nodes
+    endFlag = False
+    '''
+    - get current robot position [x, y, rot]
+    - get desired robot position [x, y, rot]
+        - convert to world coordinates
+        - interpolate path
+            - time constant between nodes (two different times for diagonal and manhattan)
+    - PID move to follow desired position
+    '''
+    while endFlag == False:
+        node1Time = time.time()
+        firstNode = pathDes.pop(0)
+        prevdesLoc = firstNode
+        if mazeList[firstNode[0],firstNode[1]] == 3:
+            break
+        secondNode = pathDes[0]
+        nodeOffset = [secondNode[0]-firstNode[0],secondNode[1]-firstNode[1]]
+        if abs(nodeOffset[0])+abs(nodeOffset[1]) > 1: # making diagonals take equal time to edges
+            nodeMultiplier = np.sqrt(2)
+        else:
+            nodeMultiplier = 1
+
+        tElapse = time.time() - node1Time
+        while tElapse < timeConst*nodeMultiplier:
+            # move robot 'nodeSize'*nodeMultiplier meters in timeConst*nodeMultiplier seconds
+            # PID track desLoc
+            desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
+            ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'y')
+            plt.pause(0.02)
+            prevdesLoc = desLoc
+            tElapse = time.time() - node1Time
+    return
+
 if __name__ == '__main__':
+    nodeSize = 16.6/5/100 # Box width in cm with maze resolution at 5 converted to m
     # FOR INITIAL LAB WORK, KNOWN ENVIRONMENT
     '''
-    - init maze
-    - determine current location in maze
-        - Apriltag distances give relative location
-        - Apriltag id gives location in map
-    - solve path
-    - follow path
-        - FIND A WAY TO DETERMINE NEXT POINTS/PATH
-        - interpolate between next point to find desired location given a certain time or velocity between
-        - PID controller to move robot to point moving in space (in time!)
-            - Use other apriltags to determine position in maze and calculate error offset
+    - |X| init maze
+    - | | determine current location in maze
+        - | | Apriltag distances give relative location
+        - | | Apriltag id gives location in map
+    - |X| solve path
+    - | | follow path
+        - | | FIND A WAY TO DETERMINE NEXT POINTS/PATH
+        - | | interpolate between next point to find desired location given a certain time or velocity between
+        - | | PID controller to move robot to point moving in space (in time!)
+            - | | Use other apriltags to determine position in maze and calculate error offset
     '''
     # Init maze
     mazeList = pd.read_csv("Lab_1\Lab1Map.csv", header=None).to_numpy()
@@ -167,18 +206,19 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
     ExpandWalls(mazeList)
-    Draw_Maze(mazeList)
+    Draw_Maze(mazeList,grid=0)
 
     # Determine current location in maze
     robotLoc = startLoc
     
     # Solve Path
     shortestPath = Dijkstra(mazeList, [robotLoc[0],robotLoc[1],0])
-    print(shortestPath)
     PlotPath(shortestPath)
+    #print(shortestPath)
 
     # Follow Path
-
+    ax.plot(robotLoc[1],height-robotLoc[0],'mx')
+    FollowPath(shortestPath,robotLoc)
 
     # Keeping the updating plot open
     while True:
