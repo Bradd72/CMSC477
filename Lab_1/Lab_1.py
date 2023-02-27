@@ -10,7 +10,7 @@ import time
 # 4 = Queued
 # 5 = Visited
 # 6 = Found Path
-# 7 = Wall Boundary
+# 7/70 = Wall Boundary
 # 8 = Robot
 # [x, y, distance]
 
@@ -90,18 +90,24 @@ def PlotPath(path):
     plt.pause(1e-10)
     return
 
-def ExpandWalls(maze):
+def ExpandWalls(maze,padding):
     '''
     Creates a 1 unit wide boundary around all known walls
     '''
-    for h in range(height-1):
-        for w in range(width-1):
-            if maze[h,w] == 1: # Wall
-                if h == 0 or w == 0:
-                    continue
-                for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:
-                    if maze[h+i[0],w+i[1]] == 0:
-                        maze[h+i[0],w+i[1]] = 7
+    for i in range(padding):
+        for h in range(height-1):
+            for w in range(width-1):
+                if maze[h,w] == 1 or maze[h,w] == 7: # Wall
+                    if h == 0 or w == 0:
+                        continue
+                    for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:
+                        if maze[h+i[0],w+i[1]] == 0:
+                            maze[h+i[0],w+i[1]] = 70
+        
+        for h in range(height-1):
+            for w in range(width-1):
+                if maze[h,w] == 70: # boundary hold
+                    maze[h,w] = 7
     return
 
 def Draw_Maze(mazelist, grid=0):
@@ -205,7 +211,7 @@ if __name__ == '__main__':
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
-    ExpandWalls(mazeList)
+    ExpandWalls(mazeList,padding=1)
     Draw_Maze(mazeList,grid=0)
 
     # Determine current location in maze
