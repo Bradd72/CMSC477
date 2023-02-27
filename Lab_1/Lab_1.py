@@ -174,8 +174,8 @@ def FollowPath(shortestPath,robotLoc):
             # move robot 'nodeSize'*nodeMultiplier meters in timeConst*nodeMultiplier seconds
             # PID track desLoc
             desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
-            ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'y')
-            plt.pause(0.02)
+            ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
+            plt.pause(0.01)
             prevdesLoc = desLoc
             tElapse = time.time() - node1Time
     return
