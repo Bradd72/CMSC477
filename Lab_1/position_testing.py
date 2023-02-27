@@ -6,6 +6,12 @@ from robomaster import robot
 from robomaster import camera
 import pandas as pd
 
+MAZE_TO_METERS = .0536
+METERS_TO_MAZE = 1/MAZE_TO_METERS
+
+robot_coord = [0,0]
+marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
+
 at_detector = Detector(
     families="tag36h11",
     nthreads=1,
@@ -15,6 +21,10 @@ at_detector = Detector(
     decode_sharpening=0.25,
     debug=0
 )
+
+def update_pos(dectect_results):
+    global robot_coord
+
 
 def find_pose_from_tag(K, detection):
     m_half_size = tag_size / 2
@@ -40,7 +50,7 @@ def find_pose_from_tag(K, detection):
     return p.reshape((3,)), r.reshape((3,))
 
 if __name__ == '__main__':
-    marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
+    
     ep_robot = robot.Robot()
     ep_robot.initialize(conn_type="ap")
     ep_camera = ep_robot.camera
@@ -58,16 +68,26 @@ if __name__ == '__main__':
 
             results = at_detector.detect(gray, estimate_tag_pose=False)
 
+            x_coord=[]
+            y_coord=[]
             for res in results:
                 pose = find_pose_from_tag(K, res)
-                # rot, jaco = cv2.Rodrigues(pose[1], pose[1])
-                # print(rot)
+                
+                for i in range(len(marker_List)):
+                    if marker_List[i][0] == res.tag_id:
+                        yaw = pose[1][1] - np.deg2rad(marker_List[i][2])
+                        x_coord.append(marker_List[i][1]-(pose[0][0]*np.sin(yaw)+pose[0][1]*np.cos(yaw))*METERS_TO_MAZE)
+                        y_coord.append(marker_List[i][2]-(pose[0][1]*np.sin(yaw)+pose[0][2]*np.cos(yaw))*METERS_TO_MAZE)
 
+                        # print("{}: {} {} ({}, {})".format(res.tag_id,pose[0]*METERS_TO_MAZE,np.rad2deg(pose[1]),marker_List[i][1],marker_List[i][2]))
                 pts = res.corners.reshape((-1, 1, 2)).astype(np.int32)
                 img = cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=5)
                 cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
-
-                print(pose)
+                
+        
+            robot_coord = [np.mean(x_coord),np.mean(y_coord)]
+            # TODO: figure out why the samples give such bad estimation
+            print("{:.2f},{:.2f}   {:.2f} {:.2f}".format(robot_coord[0],robot_coord[1],np.var(x_coord),np.var(y_coord)))
 
             cv2.imshow("img", img)
             cv2.waitKey(10)
