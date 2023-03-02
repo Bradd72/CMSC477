@@ -101,6 +101,8 @@ def Dijkstra(maze, s):
 
 def Draw_Maze_Innit(mazelist):
     # Loop over all points in maze
+    marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
+    
     ax.cla()
     nodeWallx = []
     nodeWally = []
@@ -127,6 +129,7 @@ def Draw_Maze_Innit(mazelist):
         rowCounter += 1
         entryCounter = 0
     plt.scatter(nodeWallx,nodeWally,c='k',marker=',')
+    plt.scatter(marker_List[0:17,1],marker_List[0:17,2],c='r',marker='x')
     ax.axis('equal')
     plt.pause(1e-10)
     return

@@ -25,6 +25,23 @@ at_detector = Detector(
 def update_pos(dectect_results):
     global robot_coord
 
+def marker_transform(xcoord,ycoord,angle):
+    rot, jaco = cv2.Rodrigues(np.array([-.5*np.pi,0,angle]))
+    transform = np.eye(4)
+    transform[:3,:3] = rot
+    transform[0,3] = xcoord*MAZE_TO_METERS
+    transform[1,3] = ycoord*MAZE_TO_METERS
+    transform[2,3] = .15
+    return transform
+
+def pose_transform(pose):
+    rot, jaco = cv2.Rodrigues(pose[1])
+    transform = np.eye(4)
+    transform[:3,:3] = rot
+    transform[0,3] = pose[0][0]
+    transform[1,3] = pose[0][1]
+    transform[2,3] = pose[0][2]
+    return transform
 
 def find_pose_from_tag(K, detection):
     m_half_size = tag_size / 2
@@ -50,7 +67,9 @@ def find_pose_from_tag(K, detection):
     return p.reshape((3,)), r.reshape((3,))
 
 if __name__ == '__main__':
-    
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
+
+
     ep_robot = robot.Robot()
     ep_robot.initialize(conn_type="ap")
     ep_camera = ep_robot.camera
@@ -72,12 +91,19 @@ if __name__ == '__main__':
             y_coord=[]
             for res in results:
                 pose = find_pose_from_tag(K, res)
+                bot_to_tag_trans = pose_transform(pose)
                 
                 for i in range(len(marker_List)):
                     if marker_List[i][0] == res.tag_id:
-                        yaw = pose[1][1] - np.deg2rad(marker_List[i][2])
-                        x_coord.append(marker_List[i][1]-(pose[0][0]*np.sin(yaw)+pose[0][1]*np.cos(yaw))*METERS_TO_MAZE)
-                        y_coord.append(marker_List[i][2]-(pose[0][1]*np.sin(yaw)+pose[0][2]*np.cos(yaw))*METERS_TO_MAZE)
+                        globe_to_tag_trans = marker_transform(marker_List[i,1],marker_List[i,2],1*marker_List[i,3])
+                        # globe_to_bot_trans = globe_to_tag_trans*bot_to_tag_trans
+                        globe_to_bot_trans = bot_to_tag_trans*globe_to_tag_trans
+                        # print(globe_to_bot_trans)
+                        x_coord.append(globe_to_bot_trans[0,3])
+                        y_coord.append(globe_to_bot_trans[1,3])
+                        # yaw = pose[1][1] - np.deg2rad()
+                        # x_coord.append(marker_List[i][1]-(pose[0][0]*np.sin(yaw)+pose[0][1]*np.cos(yaw))*METERS_TO_MAZE)
+                        # y_coord.append(marker_List[i][2]-(pose[0][1]*np.sin(yaw)+pose[0][2]*np.cos(yaw))*METERS_TO_MAZE)
 
                         # print("{}: {} {} ({}, {})".format(res.tag_id,pose[0]*METERS_TO_MAZE,np.rad2deg(pose[1]),marker_List[i][1],marker_List[i][2]))
                 pts = res.corners.reshape((-1, 1, 2)).astype(np.int32)
@@ -87,7 +113,7 @@ if __name__ == '__main__':
         
             robot_coord = [np.mean(x_coord),np.mean(y_coord)]
             # TODO: figure out why the samples give such bad estimation
-            print("{:.2f},{:.2f}   {:.2f} {:.2f}".format(robot_coord[0],robot_coord[1],np.var(x_coord),np.var(y_coord)))
+            print("{:.3f},{:.3f}    {:.2f},{:.2f}   {:.2f} {:.2f}".format(robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.var(x_coord),np.var(y_coord)))
 
             cv2.imshow("img", img)
             cv2.waitKey(10)
