@@ -38,6 +38,14 @@ def find_pose_from_tag(K, detection):
 
     return p.reshape((3,)), r.reshape((3,))
 
+def pose_transform(pose):
+    rot, jaco = cv2.Rodrigues(pose[1])
+    transform = np.eye(4)
+    transform[:3,:3] = rot
+    transform[0,3] = pose[0][0]
+    transform[1,3] = pose[0][1]
+    transform[2,3] = pose[0][2]
+    return transform
 
 if __name__ == '__main__':
     ep_robot = robot.Robot()
@@ -59,9 +67,10 @@ if __name__ == '__main__':
 
             for res in results:
                 pose = find_pose_from_tag(K, res)
-                rot, jaco = cv2.Rodrigues(pose[1], pose[1])
-                print(rot)
-
+                # rot, jaco = cv2.Rodrigues(pose[1], pose[1])
+                # print(rot)
+                trans = pose_transform(pose)
+                print(trans)
                 pts = res.corners.reshape((-1, 1, 2)).astype(np.int32)
                 img = cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=5)
                 cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
