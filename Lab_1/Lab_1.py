@@ -2,6 +2,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import random
+
+from pupil_apriltags import Detector
+import cv2
+from robomaster import robot
+from robomaster import camera
+
+random.seed('CMSC477',version=2)
 
 # 0 = Empty
 # 1 = Wall
@@ -162,7 +170,20 @@ def FollowPath(shortestPath,robotLoc):
             - time constant between nodes (two different times for diagonal and manhattan)
     - PID move to follow desired position
     '''
+    K_p = 1.5
+    K_i = .15
+    K_d = .1
+
+    x_val=0
+    y_val=0
+    x_integrator = 0
+    y_integrator = 0
+    x_diff = 0
+    y_diff = 0
+    prev_time = time.time()
+
     while endFlag == False:
+        
         node1Time = time.time()
         firstNode = pathDes.pop(0)
         prevdesLoc = firstNode
@@ -177,9 +198,42 @@ def FollowPath(shortestPath,robotLoc):
 
         tElapse = time.time() - node1Time
         while tElapse < timeConst*nodeMultiplier:
+            desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
+
             # move robot 'nodeSize'*nodeMultiplier meters in timeConst*nodeMultiplier seconds
             # PID track desLoc
-            desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
+            x_prev = x_val
+            y_prev = y_val
+            x_val = robotLoc[0]+2*(random.random()-0.5)-desLoc[0]
+            y_val = robotLoc[1]+2*(random.random()-0.5)-desLoc[1]
+            time_step = time.time() - prev_time
+            prev_time = time.time()
+            if time_step < .5 and time_step != 0:
+                x_integrator+=x_val
+                y_integrator+=y_val
+                x_diff = (x_val - x_prev) / time_step
+                y_diff = (y_val - y_prev) / time_step
+            else:
+                x_integrator = 0
+                y_integrator = 0
+                x_diff = 0
+                y_diff = 0
+            angle =  np.rad2deg(np.arctan2(y_val,x_val))
+            if abs(angle)>15 and x_val>.2:
+                z_val = angle
+                y_val = 0
+            else:
+                z_val=0
+            x_response = x_val*K_p + x_diff*K_d + x_integrator*K_i
+            y_response = y_val*K_p + y_diff*K_d + y_integrator*K_i
+            z_response = z_val*K_p
+            #ep_chassis.drive_speed(x_response, y_response, z_response,timeout=.1)
+            robotLoc[0] = robotLoc[0]-x_response*time_step
+            robotLoc[1] = robotLoc[1]-y_response*time_step
+            #ax.plot([robotLoc[1]+y_prev,robotLoc[1]],[height-(robotLoc[0]+x_prev),height-robotLoc[0]],'c')
+            print("x: {} | y: {}".format(robotLoc[1],robotLoc[0]))
+            ax.plot(robotLoc[1],height-robotLoc[0],"c.")
+
             ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
             plt.pause(0.01)
             prevdesLoc = desLoc
@@ -187,6 +241,11 @@ def FollowPath(shortestPath,robotLoc):
     return
 
 if __name__ == '__main__':
+    # ep_robot = robot.Robot()
+    # ep_robot.initialize(conn_type="ap")
+    # ep_chassis = ep_robot.chassis
+    
+
     nodeSize = 16.6/5/100 # Box width in cm with maze resolution at 5 converted to m
     # FOR INITIAL LAB WORK, KNOWN ENVIRONMENT
     '''
@@ -211,7 +270,7 @@ if __name__ == '__main__':
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
-    ExpandWalls(mazeList,padding=1)
+    ExpandWalls(mazeList,padding=3)
     Draw_Maze(mazeList,grid=0)
 
     # Determine current location in maze
@@ -224,11 +283,12 @@ if __name__ == '__main__':
 
     # Follow Path
     ax.plot(robotLoc[1],height-robotLoc[0],'mx')
+    robotLoc = [float(robotLoc[0]),float(robotLoc[1])]
     FollowPath(shortestPath,robotLoc)
 
     # Keeping the updating plot open
     while True:
-        plt.pause(10)
+        plt.pause(1e-10)
 
 
     # FOR BONUS, UNKNOWN ENVIRONMENT
