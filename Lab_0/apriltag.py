@@ -45,7 +45,7 @@ def pose_transform(pose):
     transform[0,3] = pose[0][0]
     transform[1,3] = pose[0][1]
     transform[2,3] = pose[0][2]
-    return transform
+    return np.linalg.inv(transform)
 
 if __name__ == '__main__':
     ep_robot = robot.Robot()
