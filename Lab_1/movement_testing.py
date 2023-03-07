@@ -1,15 +1,16 @@
 from pupil_apriltags import Detector
 import cv2
 import numpy as np
-import time
+from scipy.spatial.transform import Rotation as R
 from robomaster import robot
 from robomaster import camera
 import pandas as pd
+import time
 
 MAZE_TO_METERS = .0536
 METERS_TO_MAZE = 1/MAZE_TO_METERS
 
-robot_coord = [0,0]
+robot_coord = [0,0,0]
 marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
 
 at_detector = Detector(
@@ -26,22 +27,26 @@ def update_pos(dectect_results):
     global robot_coord
 
 def marker_transform(xcoord,ycoord,deg_angle):
+    temp_rot = np.eye(3)*-1
+    temp_rot[2,2] = 1
     rot, jaco = cv2.Rodrigues(np.array([ 0,np.deg2rad(deg_angle),0]))
     transform = np.eye(4)
-    transform[:3,:3] = rot
+    transform[:3,:3] = np.matmul(temp_rot,rot)
     transform[0,3] = xcoord*MAZE_TO_METERS
     transform[2,3] = ycoord*MAZE_TO_METERS
-    transform[1,3] = -.15
+    transform[1,3] = .15
     return transform
 
 def pose_transform(pose):
+    temp_rot = np.eye(3)*-1
+    temp_rot[2,2] = 1
     rot, jaco = cv2.Rodrigues(pose[1])
     transform = np.eye(4)
-    transform[:3,:3] = rot
+    transform[:3,:3] = np.matmul(rot,temp_rot)
     transform[0,3] = pose[0][0] *1
     transform[1,3] = pose[0][1] *1
     transform[2,3] = pose[0][2] *1
-    return transform
+    return np.linalg.inv(transform)
 
 def find_pose_from_tag(K, detection):
     m_half_size = tag_size / 2
@@ -68,22 +73,23 @@ def find_pose_from_tag(K, detection):
 
 if __name__ == '__main__':
     np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
+    x_maze_des = 70
+    y_maze_des = 40
+    heading_maze_des = .5*np.pi
+    K_p = .5
+    K_i = .01
+    prog_time=time.time()
+    time_=prog_time
+    x_error=0
+    z_error=0
+    head_error=0
+    x_integrator = 0
+    z_integrator = 0
+    head_integrator=0
+
     ep_robot = robot.Robot()
     ep_robot.initialize(conn_type="ap")
     ep_chassis = ep_robot.chassis
-
-    x_maze_des = 45
-    y_maze_des = 45
-    K_p = 1.5
-    K_i = .15
-    K_d = .1
-    robot_coord=[0,0]
-    best_globe_to_bot_trans=np.eye(4)
-    prog_time=time.time()
-    time_=prog_time
-
-    ep_robot = robot.Robot()
-    ep_robot.initialize(conn_type="ap")
     ep_camera = ep_robot.camera
     ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
 
@@ -94,48 +100,72 @@ if __name__ == '__main__':
             img = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             gray.astype(np.uint8)
-            K=np.array([[184.752, 0, 320], [0, 184.752, 180], [0, 0, 1]])
+
+            K=np.array([[184.752*1.7, 0, 320], [0, 184.752*1.7, 180], [0, 0, 1]])
+
             results = at_detector.detect(gray, estimate_tag_pose=False)
-            best_weight=0
+
             x_coord=[]
             z_coord=[]
+            rotation=[]
             weights=[]
+            
             for res in results:
                 pose = find_pose_from_tag(K, res)
                 pts = res.corners.reshape((-1, 1, 2)).astype(np.int32)
                 
-                # if (abs(pose[0][0])>.75):
-                #     img = cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=5)
-                #     cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
-                #     continue
+                if (abs(pose[0][0])>.75):
+                    img = cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=5)
+                    cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
+                    continue
                 img = cv2.polylines(img, [pts], isClosed=True, color=(0, 255, 0), thickness=5)
                 cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
-                bot_to_tag_trans = pose_transform(pose)
+                T_april_cam = pose_transform(pose)
+                
                 for i in range(len(marker_List)):
                     if marker_List[i][0] == res.tag_id:
-                        globe_to_tag_trans = marker_transform(marker_List[i,1],marker_List[i,2],1*(marker_List[i,3]))
-                        globe_to_bot_trans = np.matmul(globe_to_tag_trans,bot_to_tag_trans)
-                        weight=abs(bot_to_tag_trans[0,3])**-1
-                        if weight>best_weight:
-                            best_globe_to_bot_trans=globe_to_bot_trans
-                        x_coord.append(globe_to_bot_trans[0,3])
-                        z_coord.append(globe_to_bot_trans[2,3])
-                        weights.append(weight)
+                        T_globe_april = marker_transform(marker_List[i,1],marker_List[i,2],1*(marker_List[i,3]))
+                        T_globe_cam = np.matmul(T_globe_april,T_april_cam)
+                        rot_ = np.matmul([1,0,0],T_globe_cam[:3,:3])
+                        rotation.append(np.arctan2(rot_[2],rot_[0])*-1)
+                        x_coord.append(T_globe_cam[0,3])
+                        z_coord.append(T_globe_cam[2,3])
+                        # weights.append(1)
+                        weights.append(abs(T_globe_cam[0,3])**-1)
+                        # print("{}: {}   {}   {}".format(res.tag_id,r.as_euler("xyz",degrees=True),np.rad2deg(pose[1]),r.as_euler("xyz",degrees=True)-np.rad2deg(pose[1])))
                         # print("{}: {} {} ({}, {})".format(res.tag_id,pose[0]*METERS_TO_MAZE,np.rad2deg(pose[1]),marker_List[i][1],marker_List[i][2]))
                 
-               
+                
         
             if x_coord != []:
-                robot_coord = [np.average(x_coord,weights=weights),np.average(z_coord,weights=weights)]
-            print("{:.3f},{:.3f}    {:.2f},{:.2f}   {:.2f} {:.2f}".format(robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.var(z_coord),np.var(x_coord)))
-            index_best = max(range(len(weights)), key=weights.__getitem__)
-            ##TODO use best_globe_to_bot_trans to convert robot_coord into x and y of the robot
-            x_error=x_maze_des*MAZE_TO_METERS-robot_coord[0]
-            z_error=y_maze_des*MAZE_TO_METERS-robot_coord[1]
-            x_response=K_p*x_error
-            z_response=K_p*z_error
-            ep_chassis.drive_speed(x_response, z_response, 0,timeout=.1)
+                robot_coord = [np.average(x_coord,weights=weights),np.average(z_coord,weights=weights),np.average(rotation,weights=weights)]
+            # print("{} {} {}".format(res.tag_id,pose[0],pose[1]))
+            print("{:.3f},{:.3f}    {:.2f},{:.2f} rot={:.2f}   {:.2f}, {:.2f}, {:.2f} ".format(robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.rad2deg(robot_coord[2]),np.var(x_coord),np.var(z_coord),np.var(rotation)))
+            
+            
+            # x_error_prev = x_error
+            # z_error_prev = z_error
+            
+            x_error = x_maze_des*MAZE_TO_METERS - robot_coord[0]
+            z_error = y_maze_des*MAZE_TO_METERS - robot_coord[1]
+            head_error = heading_maze_des-robot_coord[2]
+            prev_time = time_
+            time_step = time_ - prev_time
+            if time_step < .5:
+                x_integrator+=x_error
+                z_integrator+=z_error
+                head_integrator+=head_error
+            else:
+                x_integrator = 0
+                z_integrator = 0
+                head_integrator=0
 
+            bot_x_response = np.cos(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.sin(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
+            bot_y_response = np.sin(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
+            bot_z_response = K_p*(head_error)+K_i*(head_integrator)
+            print("{:.3f}, {:.3f}, {:.3f}".format(bot_x_response,bot_y_response,bot_z_response))
+            ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
+            # ep_chassis.drive_speed(0, .1, 0,timeout=.1)
             cv2.imshow("img", img)
             cv2.waitKey(10)
 
