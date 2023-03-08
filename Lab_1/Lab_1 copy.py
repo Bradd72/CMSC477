@@ -44,7 +44,7 @@ def Dijkstra(maze, s):
     maze[s[0],s[1]] = 4 
     nodeDistances[s[0],s[1]] = s[2]
 
-    queueflag = False
+    queueflag = False;
     pathEdges = {}
     while queue != []:
         currNode = queue.pop(0) # FIFO queue
@@ -55,7 +55,7 @@ def Dijkstra(maze, s):
             adjNode = [currNode[0]+i[0],currNode[1]+i[1],currNode[2]+i[2]]
             # end node: quit
             if maze[adjNode[0],adjNode[1]] == 3:    
-                queueflag = True;
+                queueflag = True
                 if adjNode[2] < nodeDistances[adjNode[0],adjNode[1]]:
                     nodeDistances[adjNode[0],adjNode[1]] = adjNode[2]
                     pathEdges[tuple([adjNode[0],adjNode[1]])] = tuple([currNode[0],currNode[1]])
@@ -358,7 +358,7 @@ if __name__ == '__main__':
                 bot_y_response = np.sin(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
                 bot_z_response = K_p*(head_error)+K_i*(head_integrator)
                 print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f}".format(bot_x_response,bot_y_response,bot_z_response))
-                #ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
+                ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
                 cv2.imshow("img", img)
                 cv2.waitKey(10)
                 
@@ -372,7 +372,7 @@ if __name__ == '__main__':
                 #print("METER x: {} | y: {}".format(robot_coord[0],robot_coord[1]))
 
                 ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
-                plt.pause(1e-10)
+                plt.pause(0.01)
                 prevdesLoc = desLoc
                 tElapse = time.time() - node1Time
 
