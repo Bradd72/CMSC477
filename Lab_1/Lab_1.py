@@ -1,13 +1,29 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
-import time
-import random
-
 from pupil_apriltags import Detector
 import cv2
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 from robomaster import robot
 from robomaster import camera
+import pandas as pd
+import time
+import matplotlib.pyplot as plt
+import random
+
+MAZE_TO_METERS = .0536
+METERS_TO_MAZE = 1/MAZE_TO_METERS
+
+robot_coord = [0,0,0]
+marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
+
+at_detector = Detector(
+    families="tag36h11",
+    nthreads=1,
+    quad_decimate=1.0,
+    quad_sigma=0.0,
+    refine_edges=1,
+    decode_sharpening=0.25,
+    debug=0
+)
 
 random.seed('CMSC477',version=2)
 
@@ -158,118 +174,54 @@ def Draw_Maze(mazelist, grid=0):
     plt.pause(1e-10)
     return
 
-def FollowPath(shortestPath,robotLoc):
-    pathDes = shortestPath
-    timeConst = 0.25 # seconds between nodes
-    endFlag = False
-    '''
-    - get current robot position [x, y, rot]
-    - get desired robot position [x, y, rot]
-        - convert to world coordinates
-        - interpolate path
-            - time constant between nodes (two different times for diagonal and manhattan)
-    - PID move to follow desired position
-    '''
-    K_p = 4
-    K_i = .5
-    K_d = .3
+def marker_transform(xcoord,ycoord,deg_angle):
+    temp_rot = np.eye(3)*-1
+    temp_rot[2,2] = 1
+    rot, jaco = cv2.Rodrigues(np.array([ 0,np.deg2rad(deg_angle),0]))
+    transform = np.eye(4)
+    transform[:3,:3] = np.matmul(temp_rot,rot)
+    transform[0,3] = xcoord*MAZE_TO_METERS
+    transform[2,3] = ycoord*MAZE_TO_METERS
+    transform[1,3] = .15
+    return transform
 
-    x_val=0
-    y_val=0
-    x_integrator = 0
-    y_integrator = 0
-    x_diff = 0
-    y_diff = 0
-    prev_time = time.time()
+def pose_transform(pose):
+    temp_rot = np.eye(3)*-1
+    temp_rot[2,2] = 1
+    rot, jaco = cv2.Rodrigues(pose[1])
+    transform = np.eye(4)
+    transform[:3,:3] = np.matmul(rot,temp_rot)
+    transform[0,3] = pose[0][0] *1
+    transform[1,3] = pose[0][1] *1
+    transform[2,3] = pose[0][2] *1
+    return np.linalg.inv(transform)
 
-    while endFlag == False:
-        
-        node1Time = time.time()
-        firstNode = pathDes.pop(0)
-        prevdesLoc = firstNode
-        if mazeList[firstNode[0],firstNode[1]] == 3:
-            pathDes.append(firstNode)
-        else:
-            secondNode = pathDes[0]
-            nodeOffset = [secondNode[0]-firstNode[0],secondNode[1]-firstNode[1]]
-            if abs(nodeOffset[0])+abs(nodeOffset[1]) > 1: # making diagonals take equal time to edges
-                nodeMultiplier = np.sqrt(2)
-            else:
-                nodeMultiplier = 1
+def find_pose_from_tag(K, detection):
+    m_half_size = tag_size / 2
 
-        tElapse = time.time() - node1Time
-        while tElapse < timeConst*nodeMultiplier:
-            desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
-            
-            # move robot 'nodeSize'*nodeMultiplier meters in timeConst*nodeMultiplier seconds
-            # PID track desLoc
-            '''
-            SET prevBotloc TO UPDATING REAL ROBOT POSITION
-            AND DELETE RANDOM MULTIPLIERS
-            ''' 
-            prevBotloc = robotLoc
-            x_prev = x_val
-            y_prev = y_val
-            x_val = robotLoc[0]+5*nodeSize*(random.random()-0.5)-desLoc[0]
-            y_val = robotLoc[1]+5*nodeSize*(random.random()-0.5)-desLoc[1]
-            time_step = time.time() - prev_time
-            prev_time = time.time()
-            if time_step < .5 and time_step != 0:
-                x_integrator+=x_val
-                y_integrator+=y_val
-                x_diff = (x_val - x_prev) / time_step
-                y_diff = (y_val - y_prev) / time_step
-            else:
-                x_integrator = 0
-                y_integrator = 0
-                x_diff = 0
-                y_diff = 0
-            '''
-            INPUT YAW ANGLE TO ROTATE, CURRENT PATH DOES NOT INCORPORATE ROTATIONS
-            '''
-            angle =  np.rad2deg(np.arctan2(y_val,x_val))
-            if abs(angle)>15 and x_val>.2:
-                z_val = angle
-                y_val = 0
-            else:
-                z_val=0
-            x_response = x_val*K_p + x_diff*K_d + x_integrator*K_i
-            y_response = y_val*K_p + y_diff*K_d + y_integrator*K_i
-            z_response = z_val*K_p
-            #ep_chassis.drive_speed(x_response, y_response, z_response,timeout=.1)
-            prevBotloc = [robotLoc[0],robotLoc[1]]
-            robotLoc[0] = robotLoc[0]-x_response*time_step
-            robotLoc[1] = robotLoc[1]-y_response*time_step
-            ax.plot([prevBotloc[1],robotLoc[1]],[height-prevBotloc[0],height-robotLoc[0]],'c')
-            #ax.plot(robotLoc[1],height-robotLoc[0],"c.")
-            print("x: {} | y: {}".format(robotLoc[1],robotLoc[0]))
+    marker_center = np.array((0, 0, 0))
+    marker_points = []
+    marker_points.append(marker_center + (-m_half_size, m_half_size, 0))
+    marker_points.append(marker_center + ( m_half_size, m_half_size, 0))
+    marker_points.append(marker_center + ( m_half_size, -m_half_size, 0))
+    marker_points.append(marker_center + (-m_half_size, -m_half_size, 0))
+    _marker_points = np.array(marker_points)
 
-            ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
-            plt.pause(0.01)
-            prevdesLoc = desLoc
-            tElapse = time.time() - node1Time
-    return
+    object_points = _marker_points
+    image_points = detection.corners
+
+    pnp_ret = cv2.solvePnP(object_points, image_points, K, distCoeffs=None,flags=cv2.SOLVEPNP_IPPE_SQUARE)
+    if pnp_ret[0] == False:
+        raise Exception('Error solving PnP')
+
+    r = pnp_ret[1]
+    p = pnp_ret[2]
+
+    return p.reshape((3,)), r.reshape((3,))
 
 if __name__ == '__main__':
-    # ep_robot = robot.Robot()
-    # ep_robot.initialize(conn_type="ap")
-    # ep_chassis = ep_robot.chassis
-    
-
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
     nodeSize = 16.6/5/100 # Box width in cm with maze resolution at 5 converted to m
-    # FOR INITIAL LAB WORK, KNOWN ENVIRONMENT
-    '''
-    - |X| init maze
-    - | | determine current location in maze
-        - | | Apriltag distances give relative location
-        - | | Apriltag id gives location in map
-    - |X| solve path
-    - | | follow path
-        - | | FIND A WAY TO DETERMINE NEXT POINTS/PATH
-        - | | interpolate between next point to find desired location given a certain time or velocity between
-        - | | PID controller to move robot to point moving in space (in time!)
-            - | | Use other apriltags to determine position in maze and calculate error offset
-    '''
     # Init maze
     mazeList = pd.read_csv("Lab_1\Lab1Map.csv", header=None).to_numpy()
     height, width = mazeList.shape
@@ -293,21 +245,116 @@ if __name__ == '__main__':
 
     # Follow Path
     ax.plot(robotLoc[1],height-robotLoc[0],'mx')
-    robotLoc = [float(robotLoc[0]),float(robotLoc[1])]
-    FollowPath(shortestPath,robotLoc)
 
-    # Keeping the updating plot open
-    while True:
-        plt.pause(1e-10)
+    K_p = .5
+    K_i = .01
+    prog_time=time.time()
+    time_=prog_time
+    x_error=0
+    z_error=0
+    head_error=0
+    x_integrator = 0
+    z_integrator = 0
+    head_integrator=0
 
+    ep_robot = robot.Robot()
+    ep_robot.initialize(conn_type="ap")
+    ep_chassis = ep_robot.chassis
+    ep_camera = ep_robot.camera
+    ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
+    tag_size=0.16 # tag size in meters
+    
+    endFlag = False
+    pathDes = shortestPath
+    while endFlag == False:
+                
+        node1Time = time.time()
+        firstNode = pathDes.pop(0)
+        prevdesLoc = firstNode
+        if mazeList[firstNode[0],firstNode[1]] == 3:
+            pathDes.append(firstNode)
+        else:
+            secondNode = pathDes[0]
+            nodeOffset = [secondNode[0]-firstNode[0],secondNode[1]-firstNode[1]]
+            if abs(nodeOffset[0])+abs(nodeOffset[1]) > 1: # making diagonals take equal time to edges
+                nodeMultiplier = np.sqrt(2)
+            else:
+                nodeMultiplier = 1
 
-    # FOR BONUS, UNKNOWN ENVIRONMENT
-    '''
-    - init BLANK maze with start and end
-    - look for apriltag to get current robot position in maze
-        - if one exists mark that location as a wall in the maze and get relative position
-        - if one does not exist, assume at start
-        - solve a-star from current location to get path
-    - follow path until new wall is found
-        - update map with wall and resolve a-star
-    '''
+        tElapse = time.time() - node1Time
+        error_tol=.1
+        error_norm=error_tol+1
+        # TODO what is this
+        desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
+            
+        while error_norm>error_tol:
+            try:
+                img = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                gray.astype(np.uint8)
+
+                K=np.array([[184.752*1.7, 0, 320], [0, 184.752*1.7, 180], [0, 0, 1]])
+
+                results = at_detector.detect(gray, estimate_tag_pose=False)
+
+                x_estimation=[]
+                z_estimation=[]
+                rotation_estimation=[]
+                weights=[]
+                
+                for res in results:
+                    pose = find_pose_from_tag(K, res)
+                    pts = res.corners.reshape((-1, 1, 2)).astype(np.int32)
+                    
+                    if (abs(pose[0][0])>.75):
+                        img = cv2.polylines(img, [pts], isClosed=True, color=(0, 0, 255), thickness=5)
+                        cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
+                        continue
+                    img = cv2.polylines(img, [pts], isClosed=True, color=(0, 255, 0), thickness=5)
+                    cv2.circle(img, tuple(res.center.astype(np.int32)), 5, (0, 0, 255), -1)
+                    T_april_cam = pose_transform(pose)
+                    
+                    for i in range(len(marker_List)):
+                        if marker_List[i][0] == res.tag_id:
+                            T_globe_april = marker_transform(marker_List[i,1],marker_List[i,2],1*(marker_List[i,3]))
+                            T_globe_cam = np.matmul(T_globe_april,T_april_cam)
+                            rot_ = np.matmul([1,0,0],T_globe_cam[:3,:3])
+                            rotation_estimation.append(np.arctan2(rot_[2],rot_[0])*-1)
+                            x_estimation.append(T_globe_cam[0,3])
+                            z_estimation.append(T_globe_cam[2,3])
+                            # weights.append(1)
+                            weights.append(abs(T_globe_cam[0,3])**-1)        
+                if x_estimation != []:
+                    robot_coord = [np.average(x_estimation,weights=weights),np.average(z_estimation,weights=weights),np.average(rotation_estimation,weights=weights)]
+                # print("{} {} {}".format(res.tag_id,pose[0],pose[1]))
+                print("{:.3f},{:.3f}    {:.2f},{:.2f} rot={:.2f}   {:.2f}, {:.2f}, {:.2f} ".format(robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.rad2deg(robot_coord[2]),np.var(x_estimation),np.var(z_estimation),np.var(rotation_estimation)))
+                
+                x_error = desLoc[0]*MAZE_TO_METERS - robot_coord[0]
+                z_error = desLoc[0]*MAZE_TO_METERS - robot_coord[1]
+                head_error = heading_maze_des-robot_coord[2]
+                error_norm = np.linalg.norm(np.array([x_error,z_error,head_error*10]))
+                prev_time = time_
+                time_step = time_ - prev_time
+                if time_step < .5:
+                    x_integrator+=x_error
+                    z_integrator+=z_error
+                    head_integrator+=head_error
+                else:
+                    x_integrator = 0
+                    z_integrator = 0
+                    head_integrator=0
+
+                bot_x_response = np.cos(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.sin(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
+                bot_y_response = np.sin(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
+                bot_z_response = K_p*(head_error)+K_i*(head_integrator)
+                print("{:.3f}, {:.3f}, {:.3f}".format(bot_x_response,bot_y_response,bot_z_response))
+                ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
+                # ep_chassis.drive_speed(0, .1, 0,timeout=.1)
+                cv2.imshow("img", img)
+                cv2.waitKey(10)
+
+            except KeyboardInterrupt:
+                ep_camera.stop_video_stream()
+                ep_robot.close()
+                print ('Exiting')
+                exit(1)
