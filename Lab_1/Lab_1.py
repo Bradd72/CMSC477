@@ -228,6 +228,8 @@ if __name__ == '__main__':
     nodeDistances = float(16384)*np.ones(mazeList.shape, dtype=int)
     start = np.where(mazeList==2)
     startLoc = np.array([start[0][0],start[1][0]])
+    end = np.where(mazeList==3)
+    endLoc = np.array([end[0][0],end[1][0]])
     # Start interactive plot
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
@@ -240,16 +242,18 @@ if __name__ == '__main__':
     
     # Solve Path
     shortestPath = Dijkstra(mazeList, [robotLoc[0],robotLoc[1],0])
-    timeConst = 0.05 # seconds between nodes
+    timeConst = 0.75 # seconds between nodes
     endFlag = False
-    PlotPath(shortestPath)
     #print(shortestPath)
+    #shortestPath = [(40,48),(40,49),(40,50),(40,51),(40,52),(40,53),(40,54),(40,55),(40,56)]
+    PlotPath(shortestPath)
 
     # Follow Path
     ax.plot(robotLoc[1],height-robotLoc[0],'mx')
 
     K_p = .5
-    K_i = .01
+    K_i = .05
+    K_d = .05
     prog_time=time.time()
     time_=prog_time
     x_error=0
@@ -258,6 +262,8 @@ if __name__ == '__main__':
     x_integrator = 0
     z_integrator = 0
     head_integrator=0
+    x_diff = 0
+    y_diff = 0
 
     ep_robot = robot.Robot()
     ep_robot.initialize(conn_type="ap")
@@ -289,10 +295,10 @@ if __name__ == '__main__':
         error_tol=.1
         error_norm=error_tol+1
         # TODO what is this
-        desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
             
         while tElapse < timeConst*nodeMultiplier:
             try:
+                desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
                 prevBotloc = [robot_coord[0],robot_coord[1]]
                 img = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -337,10 +343,13 @@ if __name__ == '__main__':
                 #    np.rad2deg(robot_coord[2]),np.var(x_estimation),np.var(z_estimation),np.var(rotation_estimation)))
                 
                 x_error = desLoc[1]*MAZE_TO_METERS - robot_coord[0]
-                z_error = desLoc[0]*MAZE_TO_METERS - robot_coord[1]
+                z_error = (height-desLoc[0])*MAZE_TO_METERS - robot_coord[1]
+                #x_error = 70*MAZE_TO_METERS - robot_coord[0]
+                #z_error = 40*MAZE_TO_METERS - robot_coord[1]
                 
-                #heading_maze_des = 1*np.pi*(robot_coord[0]*METERS_TO_MAZE - startLoc[0])/50 - np.pi*0.5
-                heading_maze_des = -np.pi/2
+                #heading_maze_des = 1*np.pi*(robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1]) - np.pi*0.5
+                heading_maze_des = -np.sin((robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1])/2) - np.pi/2
+                #heading_maze_des = -np.pi/2
                 head_error = heading_maze_des-robot_coord[2]
                 error_norm = np.linalg.norm(np.array([x_error,z_error,head_error*10]))
                 prev_time = time_
@@ -349,16 +358,20 @@ if __name__ == '__main__':
                     x_integrator+=x_error
                     z_integrator+=z_error
                     head_integrator+=head_error
+                    x_diff = (robot_coord[0] - prevBotloc[0]) / time_step
+                    y_diff = (robot_coord[1] - prevBotloc[1]) / time_step
                 else:
                     x_integrator = 0
                     z_integrator = 0
                     head_integrator=0
+                    x_diff = 0
+                    y_diff = 0
 
                 bot_x_response = np.cos(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.sin(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
                 bot_y_response = np.sin(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
                 bot_z_response = K_p*(head_error)+K_i*(head_integrator)
-                print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f}".format(bot_x_response,bot_y_response,bot_z_response))
-                #ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
+                #print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f}".format(bot_x_response,bot_y_response,bot_z_response))
+                ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
                 cv2.imshow("img", img)
                 cv2.waitKey(10)
                 
@@ -372,6 +385,7 @@ if __name__ == '__main__':
                 #print("METER x: {} | y: {}".format(robot_coord[0],robot_coord[1]))
 
                 ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
+                print("xprev: {:.3f} | x: {:.3f} | yprev: {:.3f} | y: {:.3f}".format(prevdesLoc[0],desLoc[0],prevdesLoc[1],desLoc[1]))
                 plt.pause(1e-10)
                 prevdesLoc = desLoc
                 tElapse = time.time() - node1Time
@@ -381,6 +395,6 @@ if __name__ == '__main__':
                 ep_robot.close()
                 print ('Exiting')
                 exit(1)
-
+    ep_camera.stop_video_stream()
     while True:
         plt.pause(1e-10)
