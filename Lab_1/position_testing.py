@@ -126,7 +126,9 @@ if __name__ == '__main__':
             if x_coord != []:
                 robot_coord = [np.average(x_coord,weights=weights),np.average(z_coord,weights=weights),np.average(rotation,weights=weights)]
             # print("{} {} {}".format(res.tag_id,pose[0],pose[1]))
-            print("{:.3f},{:.3f}    {:.2f},{:.2f} rot={:.2f}   {:.2f}, {:.2f}, {:.2f} ".format(robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.rad2deg(robot_coord[2]),np.var(x_coord),np.var(z_coord),np.var(rotation)))
+            print("{:.3f},{:.3f}    {:.2f},{:.2f} rot={:.2f}   {:.2f}, {:.2f}, {:.2f} ".format(
+                robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,
+                np.rad2deg(robot_coord[2]),np.var(x_coord),np.var(z_coord),np.var(rotation)))
 
             cv2.imshow("img", img)
             cv2.waitKey(10)

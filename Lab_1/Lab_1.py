@@ -188,7 +188,8 @@ def FollowPath(shortestPath,robotLoc):
         firstNode = pathDes.pop(0)
         prevdesLoc = firstNode
         if mazeList[firstNode[0],firstNode[1]] == 3:
-            pathDes.append(firstNode)
+            #pathDes.append(firstNode)
+            break
         else:
             secondNode = pathDes[0]
             nodeOffset = [secondNode[0]-firstNode[0],secondNode[1]-firstNode[1]]
@@ -204,7 +205,7 @@ def FollowPath(shortestPath,robotLoc):
             # move robot 'nodeSize'*nodeMultiplier meters in timeConst*nodeMultiplier seconds
             # PID track desLoc
             '''
-            SET prevBotloc TO UPDATING REAL ROBOT POSITION
+            SET prevBotloc TO UPDATING REAL ROBOT POSITION in maze coords
             AND DELETE RANDOM MULTIPLIERS
             ''' 
             prevBotloc = robotLoc
