@@ -289,7 +289,7 @@ if __name__ == '__main__':
     # Solve Path
     shortestPath = Dijkstra(mazeList, [robotLoc[0],robotLoc[1],0])
     PlotPath(shortestPath)
-    #print(shortestPath)
+    print(shortestPath)
 
     # Follow Path
     ax.plot(robotLoc[1],height-robotLoc[0],'mx')

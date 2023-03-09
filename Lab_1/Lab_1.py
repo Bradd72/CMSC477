@@ -17,7 +17,7 @@ marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
 
 at_detector = Detector(
     families="tag36h11",
-    nthreads=1,
+    nthreads=2,
     quad_decimate=1.0,
     quad_sigma=0.0,
     refine_edges=1,
@@ -225,7 +225,6 @@ if __name__ == '__main__':
     # Init maze
     mazeList = pd.read_csv("Lab_1\Lab1Map.csv", header=None).to_numpy()
     height, width = mazeList.shape
-    print(height)
     nodeDistances = float(16384)*np.ones(mazeList.shape, dtype=int)
     start = np.where(mazeList==2)
     startLoc = np.array([start[0][0],start[1][0]])
@@ -243,19 +242,21 @@ if __name__ == '__main__':
     
     # Solve Path
     shortestPath = Dijkstra(mazeList, [robotLoc[0],robotLoc[1],0])
-    timeConst = 0.75 # seconds between nodes
+    timeConst = 0.5 # seconds between nodes
     endFlag = False
-    #print(shortestPath)
-    #shortestPath = [(40,48),(40,49),(40,50),(40,51),(40,52),(40,53),(40,54),(40,55),(40,56)]
+    # print(shortestPath)
+    # xcoord = 65
+    # shortestPath = [(1,xcoord),(2,xcoord),(3,xcoord),(4,xcoord),(5,xcoord),(6,xcoord),(7,xcoord),(8,xcoord),(9,xcoord),(10,xcoord),(11,xcoord),(12,xcoord),(13,xcoord),(14,xcoord),
+    #                (15,xcoord),(16,xcoord),(17,xcoord),(18,xcoord),(19,xcoord),(20,xcoord),(21,xcoord),(22,xcoord),(23,xcoord),(24,xcoord),(25,xcoord),(26,xcoord),(27,xcoord)]
+    # mazeList[shortestPath[-1][0],shortestPath[-1][1]] = 3
     PlotPath(shortestPath)
 
     # Follow Path
     ax.plot(robotLoc[1],height-robotLoc[0],'mx')
 
-    K_p = .5
-    K_i = .05
-    # K_d = .05
-    K_d = 0
+    K_p = .75
+    K_i = .5
+    K_d = 0.1
     prog_time=time.time()
     time_=prog_time
     x_error=0
@@ -274,10 +275,12 @@ if __name__ == '__main__':
     ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
     tag_size=0.16 # tag size in meters
     
+    frameCounter = 0
+
     endFlag = False
     pathDes = shortestPath
     while endFlag == False:
-                
+        # Determining which nodes robot is between
         node1Time = time.time()
         firstNode = pathDes.pop(0)
         prevdesLoc = firstNode
@@ -294,13 +297,18 @@ if __name__ == '__main__':
                 nodeMultiplier = 1
 
         tElapse = time.time() - node1Time
-        error_tol=.2
-        error_norm=error_tol+1
+        #error_tol=.2
+        #error_norm=error_tol+1
             
-        while tElapse < timeConst*nodeMultiplier or error_norm>error_tol:
+        #while tElapse < timeConst*nodeMultiplier or error_norm>error_tol:
+        prev_time = time.time()
+        while tElapse < timeConst*nodeMultiplier:
+            frameCounter += 1
             try:
                 desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
                 prevBotloc = [robot_coord[0],robot_coord[1]]
+                
+                # April tag reading and position/rotation determination
                 img = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 gray.astype(np.uint8)
@@ -338,59 +346,60 @@ if __name__ == '__main__':
                             weights.append(abs(T_globe_cam[0,3])**-1)        
                 if x_estimation != []:
                     robot_coord = [np.average(x_estimation,weights=weights),np.average(z_estimation,weights=weights),np.average(rotation_estimation,weights=weights)]
+                else:
+                    print('Robot Lost April Tag... Dead Reckoning')
+                    robot_coord = [robot_coord[0]+bot_x_response*time_step,robot_coord[1]+bot_y_response*time_step,robot_coord[2]+bot_z_response*time_step]
+                
                 # print("{} {} {}".format(res.tag_id,pose[0],pose[1]))
-                #print("{:.3f},{:.3f}    {:.2f},{:.2f} rot={:.2f}   {:.2f}, {:.2f}, {:.2f} ".format(
-                #    robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,
-                #    np.rad2deg(robot_coord[2]),np.var(x_estimation),np.var(z_estimation),np.var(rotation_estimation)))
+                # print("{:.3f},{:.3f}    {:.2f},{:.2f} rot={:.2f}   {:.2f}, {:.2f}, {:.2f} ".format(
+                #       robot_coord[0],robot_coord[1],robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,
+                #       np.rad2deg(robot_coord[2]),np.var(x_estimation),np.var(z_estimation),np.var(rotation_estimation)))
                 
                 x_error = desLoc[1]*MAZE_TO_METERS - robot_coord[0]
                 z_error = (height-desLoc[0])*MAZE_TO_METERS - robot_coord[1]
                 #x_error = 70*MAZE_TO_METERS - robot_coord[0]
                 #z_error = 40*MAZE_TO_METERS - robot_coord[1]
+                #ax.plot(70,40,'rs')
                 
-                #heading_maze_des = 1*np.pi*(robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1]) - np.pi*0.5
+                # heading_maze_des = 1*np.pi*(robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1]) - np.pi*0.5
                 # heading_maze_des = -np.sin((robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1])/2) - np.pi/2
-                #heading_maze_des = -np.pi/2
+                # heading_maze_des = -np.pi/2
+                
                 ratio = (robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1])
-                # if(ratio<.2):
-                #     heading_maze_des = -.5*np.pi
-                # elif(ratio>.2 and ratio<.7):
-                #     heading_maze_des = 0
-                # else:
-                #     heading_maze_des = .5*np.pi
                 heading_maze_des = np.pi*np.sin(np.pi*.5*ratio) -np.pi*.5
                 head_error = heading_maze_des-robot_coord[2]
                 error_norm = np.max([x_error,z_error,head_error/4])
-                prev_time = time_
+                #prev_time = time_
                 time_step = time_ - prev_time
-                if time_step < .5:
+                prev_time = time_
+                if time_step < .5 and time_step != 0:
                     x_integrator+=x_error
                     z_integrator+=z_error
                     head_integrator+=head_error
                     x_diff = (robot_coord[0] - prevBotloc[0]) / time_step
-                    y_diff = (robot_coord[1] - prevBotloc[1]) / time_step
+                    z_diff = (robot_coord[1] - prevBotloc[1]) / time_step
                 else:
                     x_integrator = 0
                     z_integrator = 0
                     head_integrator=0
                     x_diff = 0
-                    y_diff = 0
+                    z_diff = 0
 
-                bot_x_response = (np.cos(-1*robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.sin(-1*robot_coord[2])*(K_p*x_error+K_i*x_integrator))
-                bot_y_response = (-1*np.sin(-1*robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(-1*robot_coord[2])*(K_p*x_error+K_i*x_integrator))
+                bot_x_response = (np.cos(-1*robot_coord[2])*(K_p*z_error+K_i*z_integrator+K_d*z_diff)+np.sin(-1*robot_coord[2])*(K_p*x_error+K_i*x_integrator+K_d*x_diff))
+                bot_y_response = (-1*np.sin(-1*robot_coord[2])*(K_p*z_error+K_i*z_integrator+K_d*z_diff)+np.cos(-1*robot_coord[2])*(K_p*x_error+K_i*x_integrator+K_d*x_diff))
                 bot_z_response = -20*(K_p*(head_error)+K_i*(head_integrator))
-                print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f} | error:{:.3f}".format(bot_x_response,bot_y_response,bot_z_response,error_norm))
+                #print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f} | error:{:.3f}".format(bot_x_response,bot_y_response,bot_z_response,error_norm))
                 ep_chassis.drive_speed(bot_x_response, bot_y_response, bot_z_response,timeout=.1)
                 cv2.imshow("img", img)
                 cv2.waitKey(10)
                 
                 if np.sqrt(np.power(robot_coord[0]-prevBotloc[0],2) + np.power(robot_coord[1]-prevBotloc[1],2)) > .25:
                     prevBotloc = [robot_coord[0],robot_coord[1]]
-
+            
                 ax.plot([prevBotloc[0]*METERS_TO_MAZE,robot_coord[0]*METERS_TO_MAZE],[prevBotloc[1]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE],'c')
 
-                print("MAZE x: {:.3f} | y: {:.3f} | z: {:.3f}".format(robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.rad2deg(robot_coord[2])))
-                print("DES  x: {:.3f} | y: {:.3f} | z: {:.3f}".format(desLoc[1],(height-desLoc[0]),np.rad2deg(heading_maze_des)))
+                #print("MAZE x: {:.3f} | y: {:.3f} | z: {:.3f}".format(robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.rad2deg(robot_coord[2])))
+                #print("DES  x: {:.3f} | y: {:.3f} | z: {:.3f}".format(desLoc[1],(height-desLoc[0]),np.rad2deg(heading_maze_des)))
                 #print("METER x: {} | y: {}".format(robot_coord[0],robot_coord[1]))
 
                 ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
@@ -406,5 +415,6 @@ if __name__ == '__main__':
                 print ('Exiting')
                 exit(1)
     ep_camera.stop_video_stream()
+    ep_robot.close()
     while True:
         plt.pause(1e-10)
