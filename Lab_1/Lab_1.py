@@ -225,6 +225,7 @@ if __name__ == '__main__':
     # Init maze
     mazeList = pd.read_csv("Lab_1\Lab1Map.csv", header=None).to_numpy()
     height, width = mazeList.shape
+    print(height)
     nodeDistances = float(16384)*np.ones(mazeList.shape, dtype=int)
     start = np.where(mazeList==2)
     startLoc = np.array([start[0][0],start[1][0]])
@@ -253,7 +254,8 @@ if __name__ == '__main__':
 
     K_p = .5
     K_i = .05
-    K_d = .05
+    # K_d = .05
+    K_d = 0
     prog_time=time.time()
     time_=prog_time
     x_error=0
@@ -292,11 +294,10 @@ if __name__ == '__main__':
                 nodeMultiplier = 1
 
         tElapse = time.time() - node1Time
-        error_tol=.1
+        error_tol=.2
         error_norm=error_tol+1
-        # TODO what is this
             
-        while tElapse < timeConst*nodeMultiplier:
+        while tElapse < timeConst*nodeMultiplier or error_norm>error_tol:
             try:
                 desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
                 prevBotloc = [robot_coord[0],robot_coord[1]]
@@ -348,10 +349,18 @@ if __name__ == '__main__':
                 #z_error = 40*MAZE_TO_METERS - robot_coord[1]
                 
                 #heading_maze_des = 1*np.pi*(robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1]) - np.pi*0.5
-                heading_maze_des = -np.sin((robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1])/2) - np.pi/2
+                # heading_maze_des = -np.sin((robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1])/2) - np.pi/2
                 #heading_maze_des = -np.pi/2
+                ratio = (robot_coord[0]*METERS_TO_MAZE - (startLoc[1]))/(endLoc[1]-startLoc[1])
+                # if(ratio<.2):
+                #     heading_maze_des = -.5*np.pi
+                # elif(ratio>.2 and ratio<.7):
+                #     heading_maze_des = 0
+                # else:
+                #     heading_maze_des = .5*np.pi
+                heading_maze_des = np.pi*np.sin(np.pi*.5*ratio) -np.pi*.5
                 head_error = heading_maze_des-robot_coord[2]
-                error_norm = np.linalg.norm(np.array([x_error,z_error,head_error*10]))
+                error_norm = np.max([x_error,z_error,head_error/4])
                 prev_time = time_
                 time_step = time_ - prev_time
                 if time_step < .5:
@@ -367,11 +376,11 @@ if __name__ == '__main__':
                     x_diff = 0
                     y_diff = 0
 
-                bot_x_response = np.cos(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.sin(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
-                bot_y_response = np.sin(robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(robot_coord[2])*(K_p*x_error+K_i*x_integrator)
-                bot_z_response = K_p*(head_error)+K_i*(head_integrator)
-                #print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f}".format(bot_x_response,bot_y_response,bot_z_response))
-                ep_chassis.drive_speed(bot_x_response*-1, bot_y_response*1, bot_z_response*-20,timeout=.1)
+                bot_x_response = (np.cos(-1*robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.sin(-1*robot_coord[2])*(K_p*x_error+K_i*x_integrator))
+                bot_y_response = (-1*np.sin(-1*robot_coord[2])*(K_p*z_error+K_i*z_integrator)+np.cos(-1*robot_coord[2])*(K_p*x_error+K_i*x_integrator))
+                bot_z_response = -20*(K_p*(head_error)+K_i*(head_integrator))
+                print("x_resp: {:.3f} | y_resp: {:.3f} | z_resp: {:.3f} | error:{:.3f}".format(bot_x_response,bot_y_response,bot_z_response,error_norm))
+                ep_chassis.drive_speed(bot_x_response, bot_y_response, bot_z_response,timeout=.1)
                 cv2.imshow("img", img)
                 cv2.waitKey(10)
                 
@@ -381,14 +390,15 @@ if __name__ == '__main__':
                 ax.plot([prevBotloc[0]*METERS_TO_MAZE,robot_coord[0]*METERS_TO_MAZE],[prevBotloc[1]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE],'c')
 
                 print("MAZE x: {:.3f} | y: {:.3f} | z: {:.3f}".format(robot_coord[0]*METERS_TO_MAZE,robot_coord[1]*METERS_TO_MAZE,np.rad2deg(robot_coord[2])))
-                print("DES  x: {:.3f} | y: {:.3f} | z: {:.3f}".format(desLoc[1],desLoc[0],np.rad2deg(heading_maze_des)))
+                print("DES  x: {:.3f} | y: {:.3f} | z: {:.3f}".format(desLoc[1],(height-desLoc[0]),np.rad2deg(heading_maze_des)))
                 #print("METER x: {} | y: {}".format(robot_coord[0],robot_coord[1]))
 
                 ax.plot([prevdesLoc[1],desLoc[1]],[height-prevdesLoc[0],height-desLoc[0]],'g')
-                print("xprev: {:.3f} | x: {:.3f} | yprev: {:.3f} | y: {:.3f}".format(prevdesLoc[0],desLoc[0],prevdesLoc[1],desLoc[1]))
+                # print("xprev: {:.3f} | x: {:.3f} | yprev: {:.3f} | y: {:.3f}".format(prevdesLoc[0],desLoc[0],prevdesLoc[1],desLoc[1]))
                 plt.pause(1e-10)
                 prevdesLoc = desLoc
-                tElapse = time.time() - node1Time
+                if tElapse < timeConst*nodeMultiplier:
+                    tElapse = time.time() - node1Time
 
             except KeyboardInterrupt:
                 ep_camera.stop_video_stream()
