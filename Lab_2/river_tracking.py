@@ -24,6 +24,8 @@ if __name__ == '__main__':
     z_integrator=0
     prev_time=time.time()
 
+
+    theta_ave=0; rho_ave=0
     while(1):
         frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
         frame_height, frame_width, c = frame.shape
@@ -42,13 +44,34 @@ if __name__ == '__main__':
         x_shift=10
         for i in range(1, totalLabels):
             area = values[i, cv2.CC_STAT_AREA] 
-            print("area: {}  i:{} ".format(area,i))
-            if (area > 2500) and (area < 20000):
+            # print("area: {}  i:{} ".format(area,i))
+            if (area > 1000) and (area < 20000):
                 componentMask = (label_ids == i).astype("uint8") * 255
+                        
+                
+
+
                 x = values[i, cv2.CC_STAT_LEFT]
                 y = values[i, cv2.CC_STAT_TOP]
                 w = values[i, cv2.CC_STAT_WIDTH]
                 h = values[i, cv2.CC_STAT_HEIGHT]
+
+                # HOUGH LINE METHOD: theta_ave-np.pi*.5 = heading
+                # edges = cv2.Canny(componentMask, 30, 150) 
+                # lines = cv2.HoughLines(edges, 1, np.pi / 180, 30)
+                # if lines is not None:
+                #     theta_ave=0; rho_ave=0
+                #     for j in range(0, len(lines)):
+                #         for rho, theta in lines[j]:
+                #             theta_ave+=theta
+                #             rho_ave+=rho
+                #     theta_ave/=len(lines); rho_ave/=len(lines)
+                #     a = np.cos(theta_ave); b = np.sin(theta_ave)
+                #     x0 = a * rho_ave; y0 = b * rho_ave
+                #     x1 = int(x0 + 1000 * (-b)); y1 = int(y0 + 1000 * (a))
+                #     x2 = int(x0 - 1000 * (-b)); y2 = int(y0 - 1000 * (a))
+                #     cv2.line(output, (x1, y1), (x2, y2), (255, 0, 0), 1)
+
                 for j in range(h-1,0,-1):
                     if mask[y+j,x+w-x_shift]:
                         dy2=j
@@ -71,8 +94,8 @@ if __name__ == '__main__':
             z_diff = 0
         z_error = heading - des_heading
         z_response = z_error*K_p+z_integrator*K_i+z_diff*K_d
-        ep_chassis.drive_speed(0, 0, z_response,timeout=.1)
-        # print("heading:{:.2f},  z_response: {:.2f}".format(heading,z_response))
+        # ep_chassis.drive_speed(0, 0, z_response,timeout=.1)
+        print("heading:{:.2f},  z_response: {:.2f}".format(heading,z_response))
 
         ## OpenCV Windows
         res = cv2.bitwise_and(frame,frame, mask= mask)
