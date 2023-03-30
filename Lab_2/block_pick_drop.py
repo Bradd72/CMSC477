@@ -3,6 +3,11 @@ import numpy as np
 from robomaster import robot
 from robomaster import camera
 import time
+from roboflow import Roboflow
+
+rf = Roboflow(api_key="kKusTXhj0ObVGmi9slHp")
+project = rf.workspace().project("project2-l7rdy")
+model = project.version(4).model
 
 pos_x=0
 pos_y=0
@@ -16,10 +21,14 @@ x_error=0
 x_integrator=0
 y_error=0
 y_integrator=0
-error_norm=np.ones((100,1))*1000
+error_norm=np.ones((50,1))*100
 error_tol=35
 error_count=0
 prev_time=time.time()
+
+def reset_error():
+    global error_norm
+    error_norm=np.ones((50,1))*100
 
 def sub_data_handler(sub_info):
     global pos_x, pos_y 
@@ -51,6 +60,7 @@ def centroid_pid(des_cX,des_cY):
         error_count+=1
     error_norm[error_count]=np.linalg.norm((x_error,y_error))
     if np.mean(error_norm)<error_tol: #
+        reset_error()
         return True
     else:
         return False
@@ -79,7 +89,8 @@ if __name__ == '__main__':
     des_cY=200
     theta_ave=0; rho_ave=0
     item_found = False
-    goal="yellow"
+    goal="lego"
+    reset_error()
     while(run_bool):
         frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
         frame_height, frame_width, c = frame.shape
@@ -87,7 +98,7 @@ if __name__ == '__main__':
         ## Image Processing
         blurred = cv2.medianBlur(frame,9)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-        if goal=='yellow':
+        if goal=='lego':
             mask = cv2.inRange(hsv, lower_yel, upper_yel)
         elif goal=='orange':
             mask = cv2.inRange(hsv, lower_org, upper_org)
@@ -96,28 +107,41 @@ if __name__ == '__main__':
         (totalLabels, label_ids, values, centroid) = analysis  
 
         ## Find Block from Components
-        x_shift=10
         item_found = False
-        for i in range(1, totalLabels):
-            w = values[i, cv2.CC_STAT_WIDTH]
-            h = values[i, cv2.CC_STAT_HEIGHT]
-            area = values[i, cv2.CC_STAT_AREA] 
-            if goal=='orange':
-                print("area: {}  w:{} h:{}".format(area,w,h))
-            # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
-            if (area > 750) and (area < 10000) and (goal=='yellow' or (goal=='orange' and w/h>1)):
-                item_found = True
-                componentMask = (label_ids == i).astype("uint8") * 255
-                (cX, cY) = centroid[i]
-                cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+        if goal=='lego':
+            fps_time = time.time()
+            preds = model.predict(frame, confidence=40, overlap=30).json()['predictions']
+            for pred in preds:
+                if pred['class'] == 'lego':
+                    item_found = True
+                    # mask=np.zeros((frame_height, frame_width))
+                    cX=pred['x'];cY=pred['y']
+                    cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+                    cv2.rectangle(img=output, pt1=(round(pred['x']-pred['width']/2),round(pred['y']-pred['height']/2)),
+                                      pt2=(round(pred['x']+pred['width']/2),round(pred['y']+pred['height']/2)),
+                                      color=(0,255,255), thickness=2)
+            fps = 1.0/(time.time()-fps_time)
+        elif goal=='orange':
+            x_shift=10
+            for i in range(1, totalLabels):
+                w = values[i, cv2.CC_STAT_WIDTH]
+                h = values[i, cv2.CC_STAT_HEIGHT]
+                area = values[i, cv2.CC_STAT_AREA] 
+                # print("area: {}  w:{} h:{}".format(area,w,h))
+                # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
+                if (area > 750) and (area < 10000) and (goal=='yellow' or (goal=='orange' and w/h>1)):
+                    item_found = True
+                    componentMask = (label_ids == i).astype("uint8") * 255
+                    (cX, cY) = centroid[i]
+                    cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
 
         ## Arm Controller
         # print("Robotic Arm: pos x:{0}, pos y:{1}".format(pos_x, pos_y))
         if item_found:
             if centroid_pid(des_cX=des_cX,des_cY=des_cY):
-                if goal=='yellow':
+                if goal=='lego':
                     if des_cY == 200:
-                        des_cY=300
+                        des_cY=320
                     else:
                         ep_chassis.drive_speed(0,0,0)
                         time.sleep(.1)
@@ -130,14 +154,13 @@ if __name__ == '__main__':
                         des_cY=300
                         des_cX=200
                 elif goal=='orange':
-                    print("orang x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}".format(x_response,y_response,np.mean(error_norm)))
                     ep_chassis.drive_speed(.3,-.3,0)
                     time.sleep(.85)
                     ep_chassis.drive_speed(0,0,0)
                     ep_gripper.open()
                     break
             ep_chassis.drive_speed(x_response, y_response,0,timeout=.5)
-            print("x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}".format(x_response,y_response,np.mean(error_norm)))
+            print("({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,x_response,y_response,np.mean(error_norm),fps))
         else:
             ep_chassis.drive_speed(0,0,10,timeout=.5)
             print(goal)
