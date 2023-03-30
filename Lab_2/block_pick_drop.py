@@ -9,7 +9,7 @@ pos_y=0
 cX=0
 cY=0
 K_p = .001
-K_i = .005
+K_i = .0075
 K_d = .00005
 heading=0
 x_error=0
@@ -17,7 +17,7 @@ x_integrator=0
 y_error=0
 y_integrator=0
 error_norm=np.ones((100,1))*1000
-error_tol=30
+error_tol=35
 error_count=0
 prev_time=time.time()
 
@@ -70,10 +70,10 @@ if __name__ == '__main__':
     run_bool=True
     time.sleep(2)
 
-    lower_yel = np.array([12,120,100])
+    lower_yel = np.array([20,120,100])
     upper_yel = np.array([50,255,255])
     lower_org = np.array([10,113,180])
-    upper_org = np.array([30,255,255])
+    upper_org = np.array([22,255,255])
 
     des_cX=320
     des_cY=200
@@ -97,14 +97,15 @@ if __name__ == '__main__':
 
         ## Find Block from Components
         x_shift=10
+        item_found = False
         for i in range(1, totalLabels):
             w = values[i, cv2.CC_STAT_WIDTH]
             h = values[i, cv2.CC_STAT_HEIGHT]
             area = values[i, cv2.CC_STAT_AREA] 
-            # print("area: {}  i:{} ".format(area,i))
-            item_found = False
+            if goal=='orange':
+                print("area: {}  w:{} h:{}".format(area,w,h))
             # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
-            if (area > 2000) and (area < 10000) and (goal=='yellow' or (goal=='orange' and w/h>1)):
+            if (area > 750) and (area < 10000) and (goal=='yellow' or (goal=='orange' and w/h>1)):
                 item_found = True
                 componentMask = (label_ids == i).astype("uint8") * 255
                 (cX, cY) = centroid[i]
@@ -123,14 +124,23 @@ if __name__ == '__main__':
                         ep_gripper.close()
                         time.sleep(2)
                         ep_gripper.stop()
-                        ep_arm.move(0,50)    
-                        goal=='orange'
+                        ep_arm.move(0,50).wait_for_completed() 
+                        # ep_arm.move(-10,0).wait_for_completed() #doesn't do anything  
+                        goal='orange'
+                        des_cY=300
+                        des_cX=200
                 elif goal=='orange':
-                    
+                    print("orang x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}".format(x_response,y_response,np.mean(error_norm)))
+                    ep_chassis.drive_speed(.3,-.3,0)
+                    time.sleep(.85)
+                    ep_chassis.drive_speed(0,0,0)
+                    ep_gripper.open()
+                    break
             ep_chassis.drive_speed(x_response, y_response,0,timeout=.5)
+            print("x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}".format(x_response,y_response,np.mean(error_norm)))
         else:
-            ep_chassis.drive_speed(0,0,1,timeout=.5)
-        print("x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}".format(x_response,y_response,np.mean(error_norm)))
+            ep_chassis.drive_speed(0,0,10,timeout=.5)
+            print(goal)
         # print("cX:{:.2f},  cY: {:.2f}".format(cX,cY))
         ## OpenCV Windows
         res = cv2.bitwise_and(frame,frame, mask= mask)
@@ -142,8 +152,9 @@ if __name__ == '__main__':
             break
     
     # Destroys all of the windows and closes camera  
+    print ('Exiting')
+    time.sleep(1)
     cv2.destroyAllWindows()
     ep_camera.stop_video_stream()
     ep_robot.close()
-    print ('Exiting')
     exit(1)
