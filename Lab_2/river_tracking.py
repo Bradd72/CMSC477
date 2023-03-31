@@ -86,6 +86,7 @@ if __name__ == '__main__':
         z_prev=z_error
         time_ = time.time()
         time_step = time_ - prev_time
+        prev_time = time_
         if time_step < .5:
             z_integrator +=z_error  
             z_diff = (z_error - z_prev) / time_step

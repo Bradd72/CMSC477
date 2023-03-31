@@ -16,26 +16,30 @@ cY=0
 K_p = .001
 K_i = .0075
 K_d = .00005
+K_p_z = .1
+K_i_z = .75
+K_d_z = .005
 heading=0
 x_error=0
 x_integrator=0
 y_error=0
 y_integrator=0
+z_error=0
+z_integrator=0
 error_norm=np.ones((50,1))*100
 error_tol=35
 error_count=0
+error_norm_head=np.ones((50,1))*100
+error_count_head=0
 prev_time=time.time()
-
-def reset_error():
-    global error_norm
-    error_norm=np.ones((50,1))*100
+prev_time_head=time.time()
 
 def sub_data_handler(sub_info):
     global pos_x, pos_y 
     pos_x, pos_y = sub_info
 
 def centroid_pid(des_cX,des_cY):
-    global y_diff,x_diff,y_integrator,x_integrator,y_error,x_error,y_response,x_response,error_count,error_norm, prev_time
+    global y_diff,x_diff,y_integrator,x_integrator,y_error,x_error,y_response,x_response,error_count,error_norm,prev_time
     y_prev=y_error
     x_prev=x_error
     time_ = time.time()
@@ -61,7 +65,32 @@ def centroid_pid(des_cX,des_cY):
         error_count+=1
     error_norm[error_count]=np.linalg.norm((x_error,y_error))
     if np.mean(error_norm)<error_tol: #
-        reset_error()
+        error_norm=np.ones((50,1))*100
+        return True
+    else:
+        return False
+
+def heading_pid(des_heading):
+    global z_diff,z_diff,z_integrator,z_response,error_count_head,error_norm_head,prev_time_head
+    z_prev=z_error
+    time_ = time.time()
+    time_step = time_ - prev_time_head
+    prev_time_head = time_
+    if time_step < .5:
+        z_integrator +=z_error  
+        z_diff = (z_error - z_prev) / time_step
+    else:
+        z_integrator = 0
+        z_diff = 0
+    z_error = (cX - des_cX)
+    z_response = z_error*K_p_z+z_integrator*K_i_z+z_diff*K_d_z
+    if error_count_head>=len(error_norm_head)-1:
+        error_count_head=0
+    else:
+        error_count_head+=1
+    error_norm_head[error_count_head]=z_error
+    if np.mean(error_norm_head)<error_tol: #
+        error_norm_head=np.ones((50,1))*100
         return True
     else:
         return False
@@ -81,6 +110,8 @@ if __name__ == '__main__':
     run_bool=True
     time.sleep(2)
 
+    lower_blue = np.array([90,50,76])
+    upper_blue = np.array([135,255,255])
     lower_yel = np.array([20,120,100])
     upper_yel = np.array([50,255,255])
     lower_org = np.array([10,113,180])
@@ -91,19 +122,12 @@ if __name__ == '__main__':
     theta_ave=0; rho_ave=0
     item_found = False
     goal="lego"
-    reset_error()
     while(run_bool):
         frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
         frame_height, frame_width, c = frame.shape
-
-        ## Image Processing
-        blurred = cv2.medianBlur(frame,9)
-        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-        if goal=='lego':
-            mask = cv2.inRange(hsv, lower_yel, upper_yel)
-        elif goal=='orange':
-            mask = cv2.inRange(hsv, lower_org, upper_org)
-        output = blurred.copy() 
+        output = frame.copy() 
+        
+        
         analysis = cv2.connectedComponentsWithStats(mask,4,cv2.CV_32S)
         (totalLabels, label_ids, values, centroid) = analysis  
 
@@ -115,32 +139,48 @@ if __name__ == '__main__':
             for pred in preds:
                 if pred['class'] == 'lego':
                     item_found = True
-                    # mask=np.zeros((frame_height, frame_width))
+                    x1=round(pred['x']-pred['width']/2)
+                    y1=round(pred['y']-pred['height']/2)
+                    x2=round(pred['x']+pred['width']/2)
+                    y2=round(pred['y']+pred['height']/2)
+                    mask=np.zeros((frame_height, frame_width))
+                    mask[x1:x2][y1:y2] = 1
                     cX=pred['x'];cY=pred['y']
                     cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
-                    cv2.rectangle(img=output, pt1=(round(pred['x']-pred['width']/2),round(pred['y']-pred['height']/2)),
-                                      pt2=(round(pred['x']+pred['width']/2),round(pred['y']+pred['height']/2)),
-                                      color=(0,255,255), thickness=2)
+                    cv2.rectangle(img=output, pt1=(x1,y1),pt2=(x2,y2),color=(0,255,255), thickness=2)
             fps = 1.0/(time.time()-fps_time)
-        elif goal=='orange':
+        elif goal=='river':
+            ## Image Processing
+            blurred = cv2.medianBlur(frame,9)
+            hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+            mask = cv2.inRange(hsv, lower_blue, upper_blue)
             x_shift=10
             for i in range(1, totalLabels):
+                area = values[i, cv2.CC_STAT_AREA] 
+                x = values[i, cv2.CC_STAT_LEFT]
+                y = values[i, cv2.CC_STAT_TOP]
                 w = values[i, cv2.CC_STAT_WIDTH]
                 h = values[i, cv2.CC_STAT_HEIGHT]
-                area = values[i, cv2.CC_STAT_AREA] 
                 # print("area: {}  w:{} h:{}".format(area,w,h))
-                # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
-                if (area > 750) and (area < 10000) and (goal=='yellow' or (goal=='orange' and w/h>1)):
+                # Checks if Item is big enough and not at the top of screen
+                if (area > 1000) and (area < 10000) and (y>60) and (w/h>2):
                     item_found = True
                     componentMask = (label_ids == i).astype("uint8") * 255
+                    for j in range(h-1,0,-1):
+                        if mask[y+j,x+w-x_shift]:
+                            dy2=j
+                        if mask[y+j,x+x_shift]:
+                            dy1=j
+                    cv2.line(output, (x,y+dy1), (x+w, y+dy2), (0, 0, 255),2)
                     (cX, cY) = centroid[i]
                     cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+                    heading=np.arctan2(dy2-dy1,w-2*x_shift)
 
         ## Arm Controller
         # print("Robotic Arm: pos x:{0}, pos y:{1}".format(pos_x, pos_y))
         if item_found:
-            if centroid_pid(des_cX=des_cX,des_cY=des_cY):
-                if goal=='lego':
+            if goal=='lego':
+                if centroid_pid(des_cX=des_cX,des_cY=des_cY):
                     if des_cY == 200:
                         des_cY=320
                     else:
@@ -151,17 +191,18 @@ if __name__ == '__main__':
                         ep_gripper.stop()
                         ep_arm.move(0,50).wait_for_completed() 
                         # ep_arm.move(-10,0).wait_for_completed() #doesn't do anything  
-                        goal='orange'
-                        des_cY=300
-                        des_cX=200
-                elif goal=='orange':
-                    ep_chassis.drive_speed(.3,-.3,0)
-                    time.sleep(.85)
+                        goal='river'
+                z_response=0
+            elif goal=='river':
+                if centroid_pid(320,200) and heading_pid(0):
+                    ep_chassis.drive_speed(.3,0,0)
+                    time.sleep(.8)
                     ep_chassis.drive_speed(0,0,0)
-                    ep_gripper.open()
+                    time.sleep(5) # buffer for other robot to get in position
                     break
-            ep_chassis.drive_speed(x_response, y_response,0,timeout=.5)
-            print("({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,x_response,y_response,np.mean(error_norm),fps))
+                    # TODO: fix speed and sleep values
+            ep_chassis.drive_speed(x_response, y_response,z_response,timeout=.5)
+            print("({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f},  z_response: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,x_response,y_response,np.mean(error_norm),z_response,fps))
         else:
             ep_chassis.drive_speed(0,0,10,timeout=.5)
             print(goal)
