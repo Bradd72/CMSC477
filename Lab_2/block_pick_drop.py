@@ -13,22 +13,24 @@ pos_x=0
 pos_y=0
 cX=0
 cY=0
-K_p = .001
-K_i = .0075
-K_d = .00005
+K_p = .0005
+K_i = .00002
+# K_i=0
+K_d=0
+# K_d = .0000005
 heading=0
 x_error=0
 x_integrator=0
 y_error=0
 y_integrator=0
-error_norm=np.ones((50,1))*100
-error_tol=35
+error_norm=np.ones((20,1))*100
+error_tol=20
 error_count=0
 prev_time=time.time()
 
 def reset_error():
     global error_norm
-    error_norm=np.ones((50,1))*100
+    error_norm=np.ones((20,1))*100
 
 def sub_data_handler(sub_info):
     global pos_x, pos_y 
@@ -62,6 +64,10 @@ def centroid_pid(des_cX,des_cY):
     error_norm[error_count]=np.linalg.norm((x_error,y_error))
     if np.mean(error_norm)<error_tol: #
         reset_error()
+        y_integrator = 0
+        y_diff = 0
+        x_integrator = 0
+        x_diff = 0
         return True
     else:
         return False
@@ -114,13 +120,14 @@ if __name__ == '__main__':
             preds = model.predict(frame, confidence=40, overlap=30).json()['predictions']
             for pred in preds:
                 if pred['class'] == 'lego':
-                    item_found = True
-                    # mask=np.zeros((frame_height, frame_width))
-                    cX=pred['x'];cY=pred['y']
-                    cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
-                    cv2.rectangle(img=output, pt1=(round(pred['x']-pred['width']/2),round(pred['y']-pred['height']/2)),
-                                      pt2=(round(pred['x']+pred['width']/2),round(pred['y']+pred['height']/2)),
-                                      color=(0,255,255), thickness=2)
+                    if (pred['height']/pred['width'])>1.5:
+                        item_found = True
+                        # mask=np.zeros((frame_height, frame_width))
+                        cX=pred['x'];cY=pred['y']
+                        cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+                        cv2.rectangle(img=output, pt1=(round(pred['x']-pred['width']/2),round(pred['y']-pred['height']/2)),
+                                        pt2=(round(pred['x']+pred['width']/2),round(pred['y']+pred['height']/2)),
+                                        color=(0,255,255), thickness=2)
             fps = 1.0/(time.time()-fps_time)
         elif goal=='orange':
             x_shift=10
@@ -141,27 +148,31 @@ if __name__ == '__main__':
         if item_found:
             if centroid_pid(des_cX=des_cX,des_cY=des_cY):
                 if goal=='lego':
-                    if des_cY == 200:
-                        des_cY=320
-                    else:
-                        ep_chassis.drive_speed(0,0,0)
-                        time.sleep(.1)
-                        ep_gripper.close()
-                        time.sleep(2)
-                        ep_gripper.stop()
-                        ep_arm.move(0,50).wait_for_completed() 
-                        # ep_arm.move(-10,0).wait_for_completed() #doesn't do anything  
-                        goal='orange'
-                        des_cY=300
-                        des_cX=200
+                    # if des_cY == 150:
+                    #     des_cY=260
+                    # else:
+                    ep_chassis.drive_speed(.5,0,0)
+                    time.sleep(.85)
+                    ep_chassis.drive_speed(0,0,0)
+                    time.sleep(.1)
+                    ep_gripper.close()
+                    time.sleep(2)
+                    ep_gripper.stop()
+                    ep_arm.move(0,50).wait_for_completed() 
+                    # ep_arm.move(-10,0).wait_for_completed() #doesn't do anything  
+                    goal='orange'
+                    # des_cY=300
+                    # des_cX=200
+                    des_cY=300
+                    des_cX=200
                 elif goal=='orange':
-                    ep_chassis.drive_speed(.3,-.3,0)
+                    ep_chassis.drive_speed(.5,-.5,0)
                     time.sleep(.85)
                     ep_chassis.drive_speed(0,0,0)
                     ep_gripper.open()
                     break
             ep_chassis.drive_speed(x_response, y_response,0,timeout=.5)
-            print("({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,x_response,y_response,np.mean(error_norm),fps))
+            print("({}, {}) ({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,np.floor(cX),np.floor(cY),x_response,y_response,np.mean(error_norm),fps))
         else:
             ep_chassis.drive_speed(0,0,10,timeout=.5)
             print(goal)
