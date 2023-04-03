@@ -13,12 +13,16 @@ pos_x=0
 pos_y=0
 cX=0
 cY=0
-K_p = .001
-K_i = .0075
-K_d = .00005
-K_p_z = .1
-K_i_z = .75
-K_d_z = .005
+# K_p = .001
+# K_i = .0075
+# K_d = .00005
+K_p = .0005
+K_i = .00002
+# K_i=0
+K_d=0
+K_p_z = 45
+K_i_z = .5
+K_d_z = 5
 heading=0
 x_error=0
 x_integrator=0
@@ -27,12 +31,16 @@ y_integrator=0
 z_error=0
 z_integrator=0
 error_norm=np.ones((50,1))*100
-error_tol=35
+error_tol=20
+error_tol_head=.01
 error_count=0
 error_norm_head=np.ones((50,1))*100
 error_count_head=0
 prev_time=time.time()
 prev_time_head=time.time()
+z_response=0
+x_response=0
+y_response=0
 
 def centroid_pid(des_cX,des_cY):
     global y_diff,x_diff,y_integrator,x_integrator,y_error,x_error,y_response,x_response,error_count,error_norm,prev_time
@@ -67,7 +75,7 @@ def centroid_pid(des_cX,des_cY):
         return False
 
 def heading_pid(des_heading):
-    global z_diff,z_diff,z_integrator,z_response,error_count_head,error_norm_head,prev_time_head
+    global z_diff,z_diff,z_integrator,z_response,error_count_head,error_norm_head,prev_time_head,z_error
     z_prev=z_error
     time_ = time.time()
     time_step = time_ - prev_time_head
@@ -78,7 +86,7 @@ def heading_pid(des_heading):
     else:
         z_integrator = 0
         z_diff = 0
-    z_error = (cX - des_cX)
+    z_error = (heading - des_heading)
     z_response = z_error*K_p_z+z_integrator*K_i_z+z_diff*K_d_z
     if error_count_head>=len(error_norm_head)-1:
         error_count_head=0
@@ -157,14 +165,14 @@ if __name__ == '__main__':
             fps_time = time.time()
             preds = model.predict(frame, confidence=40, overlap=30).json()['predictions']
             for pred in preds:
-                if pred['class'] == 'robot':
+                if pred['class'] == 'lego':
                     item_found = True
                     x1=round(pred['x']-pred['width']/2)
                     y1=round(pred['y']-pred['height']/2)
                     x2=round(pred['x']+pred['width']/2)
                     y2=round(pred['y']+pred['height']/2)
-                    mask=np.zeros((frame_height, frame_width))
-                    mask[x1:x2][y1:y2] = 1
+                    # mask=np.zeros((frame_height, frame_width))
+                    # mask[x1:x2][y1:y2] = 1
                     cX=pred['x']
                     cY_target=pred['y']
                     cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
@@ -178,18 +186,14 @@ if __name__ == '__main__':
             (totalLabels, label_ids, values, centroid) = analysis  
             x_shift=10
             for i in range(1, totalLabels):
+                w = values[i, cv2.CC_STAT_WIDTH]
+                h = values[i, cv2.CC_STAT_HEIGHT]
                 area = values[i, cv2.CC_STAT_AREA] 
                 # print("area: {}  w:{} h:{}".format(area,w,h))
-                # Checks if Item is big enough and not at the top of screen
-                if (area > 1000) and (area < 10000) and (y>60) and (w/h>2):
+                # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
+                if (area > 750) and (area < 10000) and (goal=='yellow' or (goal=='orange' and w/h>1)):
                     item_found = True
                     componentMask = (label_ids == i).astype("uint8") * 255
-                    for j in range(h-1,0,-1):
-                        if mask[y+j,x+w-x_shift]:
-                            dy2=j
-                        if mask[y+j,x+x_shift]:
-                            dy1=j
-                    cv2.line(output, (x,y+dy1), (x+w, y+dy2), (0, 0, 255),2)
                     (cX, cY) = centroid[i]
                     cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
 
@@ -197,19 +201,19 @@ if __name__ == '__main__':
         # print("Robotic Arm: pos x:{0}, pos y:{1}".format(pos_x, pos_y))
         if item_found:
             if goal=='robot':
-                # TODO: perfect this part
-                if centroid_pid(des_cX=320,des_cY=200) and heading_pid(0) and cY_target>200:
-                    ep_chassis.drive_speed(0,0,0)
-                    ep_gripper.open()
-                    # time.sleep(1)
-                    ep_chassis.drive_speed(.3,0,0)
-                    time.sleep(.8)
-                    ep_chassis.drive_speed(0,0,0)
-                    ep_gripper.close()
-                    time.sleep(1)
-                    ep_chassis.drive_speed(-.5,0,0)
-                    time.sleep(1)
-                    goal=='orange'
+                if heading_pid(0):
+                    if centroid_pid(des_cX=320,des_cY=200)  and cY_target>200:
+                        ep_chassis.drive_speed(0,0,0)
+                        ep_gripper.open()
+                        # time.sleep(1)
+                        ep_chassis.drive_speed(.3,0,0)
+                        time.sleep(.8)
+                        ep_chassis.drive_speed(0,0,0)
+                        ep_gripper.close()
+                        time.sleep(1)
+                        ep_chassis.drive_speed(-.5,0,0)
+                        time.sleep(1)
+                        goal=='orange'
             elif goal=='orange':
                     if centroid_pid(200,300):
                         ep_chassis.drive_speed(.3,-.3,0)
