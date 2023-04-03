@@ -196,6 +196,7 @@ if __name__ == '__main__':
                     time.sleep(.8)
                     ep_chassis.drive_speed(0,0,0)
                     time.sleep(5) # buffer for other robot to get in position
+                    ep_gripper.open()
                     break
                     # TODO: fix speed and sleep values
             ep_chassis.drive_speed(x_response, y_response,z_response,timeout=.5)
