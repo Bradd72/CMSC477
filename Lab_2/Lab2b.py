@@ -114,7 +114,7 @@ if __name__ == '__main__':
 
     des_cX=320
     des_cY=200
-    goal="river"
+    goal="robot"
     while(run_bool):
         frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
         frame_height, frame_width, c = frame.shape
@@ -125,7 +125,8 @@ if __name__ == '__main__':
 
         ## Find Block from Components
         item_found = False
-        if goal=='river':
+        if goal=='robot':
+            # river tracking
             blurred = cv2.medianBlur(frame,9)
             hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, lower_blue, upper_blue)
@@ -152,11 +153,11 @@ if __name__ == '__main__':
                     (cX_, cY) = centroid[i]
                     cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
                     heading=np.arctan2(dy2-dy1,w-2*x_shift)
-            # Lego tracking left to right
+            # Tracking left to right
             fps_time = time.time()
             preds = model.predict(frame, confidence=40, overlap=30).json()['predictions']
             for pred in preds:
-                if pred['class'] == 'lego':
+                if pred['class'] == 'robot':
                     item_found = True
                     x1=round(pred['x']-pred['width']/2)
                     y1=round(pred['y']-pred['height']/2)
@@ -165,7 +166,7 @@ if __name__ == '__main__':
                     mask=np.zeros((frame_height, frame_width))
                     mask[x1:x2][y1:y2] = 1
                     cX=pred['x']
-                    cY_lego=pred['y']
+                    cY_target=pred['y']
                     cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
                     cv2.rectangle(img=output, pt1=(x1,y1),pt2=(x2,y2),color=(0,255,255), thickness=2)
             fps = 1.0/(time.time()-fps_time)
@@ -195,16 +196,17 @@ if __name__ == '__main__':
         ## Arm Controller
         # print("Robotic Arm: pos x:{0}, pos y:{1}".format(pos_x, pos_y))
         if item_found:
-            if goal=='lego':
+            if goal=='robot':
                 # TODO: perfect this part
-                if centroid_pid(des_cX=des_cX,des_cY=des_cY) and heading_pid(0) and cY_lego>200:
+                if centroid_pid(des_cX=320,des_cY=200) and heading_pid(0) and cY_target>200:
                     ep_chassis.drive_speed(0,0,0)
                     ep_gripper.open()
-                    time.sleep(1)
+                    # time.sleep(1)
                     ep_chassis.drive_speed(.3,0,0)
                     time.sleep(.8)
                     ep_chassis.drive_speed(0,0,0)
                     ep_gripper.close()
+                    time.sleep(1)
                     ep_chassis.drive_speed(-.5,0,0)
                     time.sleep(1)
                     goal=='orange'
