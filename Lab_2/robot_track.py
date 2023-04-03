@@ -10,8 +10,8 @@ pos_x=0
 pos_y=0
 cX=0
 cY=0
-K_p = .0001
-K_i = .000075
+K_p = .0005
+K_i = .00002
 # K_d = .00005
 # K_i = 0
 K_d = 0
@@ -160,7 +160,7 @@ if __name__ == '__main__':
                 w = values[i, cv2.CC_STAT_WIDTH]
                 h = values[i, cv2.CC_STAT_HEIGHT]
                 # print("area: {}  i:{} ".format(area,i))
-                if (area > 1000) and (area < 30000) and (y>60):
+                if (area > 1000) and (area < 30000) and (y>120):
                     componentMask = (label_ids == i).astype("uint8") * 255
 
                     for j in range(h-1,0,-1):
@@ -185,7 +185,7 @@ if __name__ == '__main__':
                 z_integrator = 0
                 z_diff = 0
             z_response = z_error*K_pz+z_integrator*K_iz+z_diff*K_dz
-            if np.abs(heading) <= 0.03:
+            if np.abs(heading) <= 0.025:
                 ep_chassis.drive_speed(0, 0, 0,timeout=.1)
                 status = 'center robot'
             else:
@@ -206,7 +206,7 @@ if __name__ == '__main__':
                 x_integrator = 0
                 x_diff = 0
             x_response = x_error*K_px + x_integrator*K_ix + x_diff*K_dx
-            if np.abs(x_error) <= 20:
+            if np.abs(x_error) <= 10:
                 ep_chassis.drive_speed(0, 0, 0,timeout=.1)
                 status = 'move to river'
             else:
@@ -260,12 +260,12 @@ if __name__ == '__main__':
                 x_diff = 0
             x_response = x_error*K_px + x_integrator*K_ix + x_diff*K_dx
             if np.abs(x_error) <= 15:
-                ep_chassis.drive_speed(.15,0,0)
+                ep_chassis.drive_speed(.2,0,0)
                 time.sleep(.8)
                 ep_chassis.drive_speed(0, 0, 0,timeout=.1)
-                #ep_arm.moveto(250,0).wait_for_completed()
-                ep_gripper.close()
                 time.sleep(5)
+                ep_gripper.close()
+                time.sleep(10)
                 ep_chassis.drive_speed(-.15,0,.2)
                 time.sleep(.75)
                 ep_chassis.drive_speed(0,0,0)
@@ -304,10 +304,11 @@ if __name__ == '__main__':
                     (cX, cY) = centroid[i]
                     cv2.circle(final_frame, (int(cX), int(cY)), 4, (0, 0, 255), -1)
             if item_found:
-                if centroid_pid(200,300):
-                    ep_chassis.drive_speed(.3,-.3,0)
+                if centroid_pid(300,200):
+                    ep_chassis.drive_speed(.75,-.1,0.2,timeout=.5)
                     time.sleep(.85)
-                    ep_chassis.drive_speed(0,0,0)
+                    ep_chassis.drive_speed(0,0,0,timeout=.5)
+                    ep_arm.moveto(200,0).wait_for_completed()
                     ep_gripper.open()
                     break
                 print("({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}".format(cX,cY,x_response,y_response,np.mean(error_norm),z_response))
@@ -320,7 +321,7 @@ if __name__ == '__main__':
         res = cv2.bitwise_and(frame,frame, mask=mask)
         cv2.imshow('frame',final_frame)
         # cv2.imshow('mask',mask)
-        cv2.imshow('res',res)
+        # cv2.imshow('res',res)
         # cv2.imshow("out",output)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
