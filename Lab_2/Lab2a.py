@@ -13,12 +13,16 @@ pos_x=0
 pos_y=0
 cX=0
 cY=0
-K_p = .001
-K_i = .0075
-K_d = .00005
-K_p_z = .1
-K_i_z = .75
-K_d_z = .005
+# K_p = .001
+# K_i = .0075
+# K_d = .00005
+K_p = .0015
+K_i = .00005
+# K_i=0
+K_d=0
+K_p_z = 45
+K_i_z = .5
+K_d_z = 5
 heading=0
 x_error=0
 x_integrator=0
@@ -27,12 +31,16 @@ y_integrator=0
 z_error=0
 z_integrator=0
 error_norm=np.ones((50,1))*100
-error_tol=35
+error_tol=20
+error_tol_head=.03
 error_count=0
 error_norm_head=np.ones((50,1))*100
 error_count_head=0
 prev_time=time.time()
 prev_time_head=time.time()
+z_response=0
+x_response=0
+y_response=0
 
 def sub_data_handler(sub_info):
     global pos_x, pos_y 
@@ -46,9 +54,9 @@ def centroid_pid(des_cX,des_cY):
     time_step = time_ - prev_time
     prev_time = time_
     if time_step < .5:
-        y_integrator +=y_error  
+        y_integrator +=y_error*time_step   
         y_diff = (y_error - y_prev) / time_step
-        x_integrator +=x_error  
+        x_integrator +=x_error*time_step  
         x_diff = (x_error - x_prev) / time_step
     else:
         y_integrator = 0
@@ -71,31 +79,33 @@ def centroid_pid(des_cX,des_cY):
         return False
 
 def heading_pid(des_heading):
-    global z_diff,z_diff,z_integrator,z_response,error_count_head,error_norm_head,prev_time_head
+    global heading,z_error,z_diff,z_diff,z_integrator,z_response,error_count_head,error_norm_head,prev_time_head
     z_prev=z_error
+    z_error = heading-des_heading
     time_ = time.time()
     time_step = time_ - prev_time_head
     prev_time_head = time_
-    if time_step < .5:
-        z_integrator +=z_error  
+    if time_step < .25:
+        z_integrator +=z_error*time_step   
         z_diff = (z_error - z_prev) / time_step
     else:
         z_integrator = 0
         z_diff = 0
-    z_error = (cX - des_cX)
+    
     z_response = z_error*K_p_z+z_integrator*K_i_z+z_diff*K_d_z
     if error_count_head>=len(error_norm_head)-1:
         error_count_head=0
     else:
         error_count_head+=1
-    error_norm_head[error_count_head]=z_error
-    if np.mean(error_norm_head)<error_tol: #
-        error_norm_head=np.ones((50,1))*100
+    error_norm_head[error_count_head]=abs(z_error)
+    if np.mean(error_norm_head)<error_tol_head: #
+        # error_norm_head=np.ones((50,1))*100
         return True
     else:
         return False
 
 if __name__ == '__main__':
+    fps=0
     ep_robot = robot.Robot()
     ep_robot.initialize(conn_type="ap")
     ep_chassis = ep_robot.chassis
@@ -121,6 +131,7 @@ if __name__ == '__main__':
     des_cY=200
     item_found = False
     goal="lego"
+    # goal="river"
     while(run_bool):
         frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
         frame_height, frame_width, c = frame.shape
@@ -153,63 +164,74 @@ if __name__ == '__main__':
             (totalLabels, label_ids, values, centroid) = analysis  
             x_shift=10
             for i in range(1, totalLabels):
-                area = values[i, cv2.CC_STAT_AREA] 
-                x = values[i, cv2.CC_STAT_LEFT]
-                y = values[i, cv2.CC_STAT_TOP]
-                w = values[i, cv2.CC_STAT_WIDTH]
-                h = values[i, cv2.CC_STAT_HEIGHT]
-                # print("area: {}  w:{} h:{}".format(area,w,h))
-                # Checks if Item is big enough and not at the top of screen
-                if (area > 1000) and (area < 10000) and (y>60) and (w/h>2):
-                    item_found = True
-                    componentMask = (label_ids == i).astype("uint8") * 255
-                    for j in range(h-1,0,-1):
-                        if mask[y+j,x+w-x_shift]:
-                            dy2=j
-                        if mask[y+j,x+x_shift]:
-                            dy1=j
-                    cv2.line(output, (x,y+dy1), (x+w, y+dy2), (0, 0, 255),2)
-                    (cX, cY) = centroid[i]
-                    cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
-                    heading=np.arctan2(dy2-dy1,w-2*x_shift)
+                if not item_found:
+                    area = values[i, cv2.CC_STAT_AREA] 
+                    x = values[i, cv2.CC_STAT_LEFT]
+                    y = values[i, cv2.CC_STAT_TOP]
+                    w = values[i, cv2.CC_STAT_WIDTH]
+                    h = values[i, cv2.CC_STAT_HEIGHT]
+                    # print("area: {}  w:{} h:{}".format(area,w,h))
+                    # Checks if Item is big enough and not at the top of screen
+                    if (area > 1000) and (area < 40000) and (y>120):
+                        item_found = True
+                        componentMask = (label_ids == i).astype("uint8") * 255
+                        for j in range(h-1,0,-1):
+                            if mask[y+j,x+w-x_shift]:
+                                dy2=j
+                            if mask[y+j,x+x_shift]:
+                                dy1=j
+                        cv2.line(output, (x,y+dy1), (x+w, y+dy2), (0, 0, 255),2)
+                        (cX, cY) = centroid[i]
+                        cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+                        heading=np.arctan2(dy2-dy1,w-2*x_shift)
 
         ## Arm Controller
         # print("Robotic Arm: pos x:{0}, pos y:{1}".format(pos_x, pos_y))
         if item_found:
             if goal=='lego':
-                if centroid_pid(des_cX=des_cX,des_cY=des_cY):
-                    if des_cY == 200:
-                        des_cY=320
-                    else:
-                        ep_chassis.drive_speed(0,0,0)
-                        time.sleep(.1)
-                        ep_gripper.close()
-                        time.sleep(2)
-                        ep_gripper.stop()
-                        ep_arm.move(0,50).wait_for_completed() 
-                        # ep_arm.move(-10,0).wait_for_completed() #doesn't do anything  
-                        goal='river'
+                if centroid_pid(des_cX=320,des_cY=200):
+                    ep_chassis.drive_speed(.3,0,0,timeout=.5)
+                    time.sleep(1)
+                    ep_chassis.drive_speed(.05,0,0,timeout=.1)
+                    time.sleep(.1)
+                    ep_chassis.drive_speed(0,0,0)
+                    time.sleep(.1)
+                    ep_gripper.close()
+                    time.sleep(2)
+                    ep_gripper.stop()
+                    ep_arm.move(0,60).wait_for_completed() 
+                    # ep_arm.move(-10,0).wait_for_completed() #doesn't do anything  
+                    goal='river'
                 z_response=0
             elif goal=='river':
-                if centroid_pid(320,200) and heading_pid(0):
-                    ep_chassis.drive_speed(.3,0,0)
-                    time.sleep(.8)
-                    ep_chassis.drive_speed(0,0,0)
-                    time.sleep(5) # buffer for other robot to get in position
-                    ep_gripper.open()
-                    break
-                    # TODO: fix speed and sleep values
+                x_response=0;y_response=0
+                if heading_pid(0):
+                    if centroid_pid(200,250):
+                        print("forward")
+                        ep_chassis.drive_speed(0,0,0)
+                        ep_chassis.drive_speed(.251,0,0,timeout=1.85)
+                        time.sleep(2)
+                        ep_chassis.drive_speed(0,0,0)
+                        
+                        time.sleep(15) # buffer for other robot to get in position
+                        ep_gripper.open()
+                        run_bool =False
+                        break
+                        # TODO: fix speed and sleep values
+                # x_response=0;y_response=0
             ep_chassis.drive_speed(x_response, y_response,z_response,timeout=.5)
-            print("({}, {}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f},  z_response: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,x_response,y_response,np.mean(error_norm),z_response,fps))
+            print("({}, {}, {}) ({}, {}, {:.2f}) x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}, error_norm_head: {:.2f}, fps: {:.1f}".format(des_cX,des_cY,0,np.floor(cX),np.floor(cY),heading,x_response,y_response,np.mean(error_norm),z_response,np.mean(error_norm_head),fps))
         else:
-            ep_chassis.drive_speed(0,0,10,timeout=.5)
+            ep_chassis.drive_speed(0,0,20,timeout=.5)
             print(goal)
         # print("cX:{:.2f},  cY: {:.2f}".format(cX,cY))
         ## OpenCV Windows
-        res = cv2.bitwise_and(frame,frame, mask= mask)
+        # 
         # cv2.imshow('frame',frame)
         # cv2.imshow('mask',mask)
-        cv2.imshow('res',res)
+        # if goal == 'river':
+        #     res = cv2.bitwise_and(frame,frame, mask= mask)
+        #     cv2.imshow('res',res)
         cv2.imshow("out",output)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
