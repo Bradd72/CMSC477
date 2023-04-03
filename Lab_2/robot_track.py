@@ -25,8 +25,8 @@ if __name__ == '__main__':
 
     res_plotted = frame
 
-    K_pz = 30
-    K_iz = 15
+    K_pz = 15
+    K_iz = 7.5
     K_dz = 5
     K_px = .0015
     K_ix = 0.001
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                 w = values[i, cv2.CC_STAT_WIDTH]
                 h = values[i, cv2.CC_STAT_HEIGHT]
                 # print("area: {}  i:{} ".format(area,i))
-                if (area > 1000) and (area < 10000) and (y>60):
+                if (area > 1000) and (area < 20000) and (y>60):
                     componentMask = (label_ids == i).astype("uint8") * 255
 
                     for j in range(h-1,0,-1):
@@ -101,13 +101,13 @@ if __name__ == '__main__':
             z_prev=z_error
             time_ = time.time()
             time_step = time_ - prev_time
-            if time_step < .5:
+            z_error = heading - des_heading
+            if time_step < .75 and time_step != 0:
                 z_integrator +=z_error  
                 z_diff = (z_error - z_prev) / time_step
             else:
                 z_integrator = 0
                 z_diff = 0
-            z_error = heading - des_heading
             z_response = z_error*K_pz+z_integrator*K_iz+z_diff*K_dz
             if np.abs(heading) <= 0.03:
                 ep_chassis.drive_speed(0, 0, 0,timeout=.1)
@@ -115,26 +115,28 @@ if __name__ == '__main__':
             else:
                 ep_chassis.drive_speed(0, 0, z_response,timeout=.1)
                 print("heading:{:.2f},  z_response: {:.2f}".format(heading,z_response))
+            prev_time = time_    
 
         if status == 'center robot':
             ## Movement Controller
             x_prev=x_error
             time_ = time.time()
             time_step = time_ - prev_time
-            if time_step < .5:
+            x_error = robot_center - frame_width/2
+            if time_step < .75 and time_step != 0:
                 x_integrator +=x_error  
                 x_diff = (x_error - x_prev) / time_step
             else:
                 x_integrator = 0
                 x_diff = 0
-            x_error = robot_center - frame_width/2
             x_response = x_error*K_px + x_integrator*K_ix + x_diff*K_dx
             if np.abs(x_error) <= 20:
                 ep_chassis.drive_speed(0, 0, 0,timeout=.1)
                 status = 'move to river'
             else:
-                ep_chassis.drive_speed(0, 1.5*x_response, 0,timeout=.1)
+                ep_chassis.drive_speed(0, x_response, 0,timeout=.1)
                 print("x offset:{:.2f},  x_response:{:.2f}".format(x_error,x_response))
+            prev_time = time_
 
         if status == 'move to river':
             ## Image Processing
@@ -156,7 +158,7 @@ if __name__ == '__main__':
                 w = values[i, cv2.CC_STAT_WIDTH]
                 h = values[i, cv2.CC_STAT_HEIGHT]
                 # print("area: {}  i:{} ".format(area,i))
-                if (area > 1000) and (area < 10000) and (y>60):
+                if (area > 1000) and (area < 20000) and (y>60):
                     componentMask = (label_ids == i).astype("uint8") * 255
 
                     for j in range(h-1,0,-1):
@@ -173,20 +175,21 @@ if __name__ == '__main__':
             x_prev=x_error
             time_ = time.time()
             time_step = time_ - prev_time
-            if time_step < .5:
+            x_error = (0.8*frame_height) - cY
+            if time_step < .75 and time_step != 0:
                 x_integrator +=x_error  
                 x_diff = (x_error - x_prev) / time_step
             else:
                 x_integrator = 0
                 x_diff = 0
-            x_error = (0.6*frame_height) - cY
             x_response = x_error*K_px + x_integrator*K_ix + x_diff*K_dx
             if np.abs(x_error) <= 15:
                 ep_chassis.drive_speed(0, 0, 0,timeout=.1)
                 status = 'ready to grab'
             else:
-                ep_chassis.drive_speed(1.5*x_response, 0, 0,timeout=.1)
-                print("y offset:{:.2f},  x_response:{:.2f}".format(x_error,x_response))
+                ep_chassis.drive_speed(x_response, 0, 0,timeout=.1)
+                print("y offset:{:.2f},  x_response:{:.2f}, area:{:.2f}".format(x_error,x_response,area))
+            prev_time = time_
 
         ## OpenCV Windows
         res = cv2.bitwise_and(frame,frame, mask=mask)
