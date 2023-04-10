@@ -1,23 +1,19 @@
-import socket
+import sys
+from socket import socket, AF_INET, SOCK_DGRAM
 
-def Main():
+SERVER_IP   = '10.104.68.209'
+PORT_NUMBER = 5000
+SIZE = 1024
+print ("Test client sending packets to IP {0}, via port {1}\n".format(SERVER_IP, PORT_NUMBER))
 
-    host='10.104.68.209' #client ip
-    port = 4005
-    
-    server = ('10.104.68.209', 4000)
-    
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((host,port))
-    
-    message = input("-> ")
-    while message !='q':
-        s.sendto(message.encode('utf-8'), server)
-        data, addr = s.recvfrom(1024)
-        data = data.decode('utf-8')
-        print("Received from server: " + data)
-        message = input("-> ")
-    s.close()
+mySocket = socket( AF_INET, SOCK_DGRAM )
+myMessage = "Hello!"
+myMessage1 = ""
+i = 0
+while i < 10:
+    mySocket.sendto(myMessage.encode('utf-8'),(SERVER_IP,PORT_NUMBER))
+    i = i + 1
 
-if __name__=='__main__':
-    Main()
+mySocket.sendto(myMessage1.encode('utf-8'),(SERVER_IP,PORT_NUMBER))
+
+sys.exit()

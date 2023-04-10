@@ -1,23 +1,16 @@
-import socket
+from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM
+import sys
+PORT_NUMBER = 5000
+SIZE = 1024
 
-def Main():
-   
-    host = '10.104.68.209' #Server ip
-    port = 4000
+hostName = gethostbyname( '0.0.0.0' )
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((host, port))
+mySocket = socket( AF_INET, SOCK_DGRAM )
+mySocket.bind( (hostName, PORT_NUMBER) )
 
-    print("Server Started")
-    while True:
-        data, addr = s.recvfrom(1024)
-        data = data.decode('utf-8')
-        print("Message from: " + str(addr))
-        print("From connected user: " + data)
-        data = data.upper()
-        print("Sending: " + data)
-        s.sendto(data.encode('utf-8'), addr)
-    c.close()
+print ("Test server listening on port {0}\n".format(PORT_NUMBER))
 
-if __name__=='__main__':
-    Main()
+while True:
+    (data,addr) = mySocket.recvfrom(SIZE)
+    print(data)
+sys.exit()
