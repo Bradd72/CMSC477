@@ -1,19 +1,62 @@
-import sys
-from socket import socket, AF_INET, SOCK_DGRAM
+import socket
+import select
+import time
 
-SERVER_IP   = '10.104.68.209'
-PORT_NUMBER = 5000
-SIZE = 1024
-print ("Test client sending packets to IP {0}, via port {1}\n".format(SERVER_IP, PORT_NUMBER))
+#HOST = 'localhost'
+HOST = '10.104.68.209'
+PORT = 65439
 
-mySocket = socket( AF_INET, SOCK_DGRAM )
-myMessage = "Hello!"
-myMessage1 = ""
-i = 0
-while i < 10:
-    mySocket.sendto(myMessage.encode('utf-8'),(SERVER_IP,PORT_NUMBER))
-    i = i + 1
+ACK_TEXT = 'text_received'
 
-mySocket.sendto(myMessage1.encode('utf-8'),(SERVER_IP,PORT_NUMBER))
 
-sys.exit()
+def main():
+    # instantiate a socket object
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    print('socket instantiated')
+
+    # connect the socket
+    connectionSuccessful = False
+    while not connectionSuccessful:
+        try:
+            sock.connect((HOST, PORT))    # Note: if execution gets here before the server starts up, this line will cause an error, hence the try-except
+            print('socket connected')
+            connectionSuccessful = True
+        except:
+            pass
+        # end try
+    # end while
+
+    socks = [sock]
+    while True:
+        readySocks, _, _ = select.select(socks, [], [], 5)
+        for sock in readySocks:
+            message = receiveTextViaSocket(sock)
+            print('received: ' + str(message))
+        # end for
+    # end while
+# end function
+
+def receiveTextViaSocket(sock):
+    # get the text via the scoket
+    encodedMessage = sock.recv(1024)
+
+    # if we didn't get anything, log an error and bail
+    if not encodedMessage:
+        print('error: encodedMessage was received as None')
+        return None
+    # end if
+
+    # decode the received text message
+    message = encodedMessage.decode('utf-8')
+
+    # now time to send the acknowledgement
+    # encode the acknowledgement text
+    encodedAckText = bytes(ACK_TEXT, 'utf-8')
+    # send the encoded acknowledgement text
+    sock.sendall(encodedAckText)
+
+    return message
+# end function
+
+if __name__ == '__main__':
+    main()
