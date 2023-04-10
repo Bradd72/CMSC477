@@ -1,19 +1,23 @@
 import socket
-import os
-import sys
 
-s=socket.socket()
-#host=socket.gethostname()
-host='127.0.0.1'
-port=12000 #ports after 6000 are free
-s.bind((host,port))
-s.listen(10)
-while True:
-    c,addr = s.accept()
-    print('Client connected',addr)
-    print('Got Connection from' ,addr)
+def Main():
+   
+    host = '10.104.68.209' #Server ip
+    port = 4000
 
-    content = c.recv(100).decode()
-    if not content:
-        break
-    print(content)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind((host, port))
+
+    print("Server Started")
+    while True:
+        data, addr = s.recvfrom(1024)
+        data = data.decode('utf-8')
+        print("Message from: " + str(addr))
+        print("From connected user: " + data)
+        data = data.upper()
+        print("Sending: " + data)
+        s.sendto(data.encode('utf-8'), addr)
+    c.close()
+
+if __name__=='__main__':
+    Main()

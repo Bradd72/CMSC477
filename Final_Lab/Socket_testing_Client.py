@@ -1,10 +1,23 @@
 import socket
-import os
-s=socket.socket()
-#host=socket.gethostname() #server hostname
-host='127.0.0.1'
-port=12000 #same as server
-s.connect((host,port))
-fileToSend = open('ToSend.txt','r')
-content = fileToSend.read()
-s.send(content.encode())
+
+def Main():
+
+    host='10.104.68.209' #client ip
+    port = 4005
+    
+    server = ('10.104.68.209', 4000)
+    
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind((host,port))
+    
+    message = input("-> ")
+    while message !='q':
+        s.sendto(message.encode('utf-8'), server)
+        data, addr = s.recvfrom(1024)
+        data = data.decode('utf-8')
+        print("Received from server: " + data)
+        message = input("-> ")
+    s.close()
+
+if __name__=='__main__':
+    Main()
