@@ -13,7 +13,7 @@ MAZE_TO_METERS = .0536
 METERS_TO_MAZE = 1/MAZE_TO_METERS
 
 robot_coord = [0,0,0]
-marker_List = pd.read_csv("Lab_1\WallLookUp.csv", header=None).to_numpy()
+marker_List = pd.read_csv("Labs\Final_Lab\WallLookUp.csv", header=None).to_numpy()
 
 at_detector = Detector(
     families="tag36h11",
