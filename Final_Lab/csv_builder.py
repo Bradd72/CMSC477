@@ -12,15 +12,15 @@ ORIGIN_VALUE = 2
 import numpy as np
 
 def meter_to_scale(meters_value):
-    multiplier = 10
+    multiplier = 15
     return int(meters_value*multiplier)
 
 if __name__ == "__main__":
-    maze_width_meters = 6
-    maze_height_meters = 3
-    leftEdge_BlockZone_from_leftEdgeMaze_meters = 4
-    width_BlockZone_meters = 1
-    height_BlockZone_meters = 2
+    maze_width_meters = 16/3.281    # ft to m
+    maze_height_meters = 14/3.281   # ft to m
+    leftEdge_BlockZone_from_leftEdgeMaze_meters = 3.4
+    width_BlockZone_meters = 0.52
+    height_BlockZone_meters = 1.055
 
     maze = np.zeros((meter_to_scale(maze_height_meters),meter_to_scale(maze_width_meters)))
     (maze_height, maze_width) = np.shape(maze)
@@ -37,5 +37,6 @@ if __name__ == "__main__":
         for j in range(int(river_center[0]+height_BlockZone/(-2)),int(river_center[0]+height_BlockZone/(2))):
             maze[j,i] = WALL_VALUE
 
-
-    np.savetxt('Final_Lab/Final_Lab_maze.csv', maze,delimiter=",")
+    # open by creating new file and append to it
+    with open('Labs/Final_Lab/Final_Lab_maze2.csv','w') as f:
+        np.savetxt(f, maze, delimiter=",", fmt="%d")

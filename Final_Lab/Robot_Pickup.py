@@ -1,6 +1,10 @@
 '''
 CMSC477 - Final Lab
 Robot responsible for picking and transfering blocks over river
+
+Left off: Have position, rotation, and distance -> need to plot obstacles on map relative to current robot loc
+    - potential every __ seconds, remove all obstacles on map and restart the obstacles
+
 '''
 import cv2
 import numpy as np
@@ -10,6 +14,7 @@ import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import random
+import threading
 random.seed('Final Lab',version=2)
 
 import Dijkstra
@@ -27,6 +32,9 @@ HOST = gethostbyname('0.0.0.0')
 PORT = 65439
 ACK_TEXT = 'text_received'
 
+def sub_attitude_info_handler(attitude_info):
+    global yaw, pitch, roll
+    yaw, pitch, roll = attitude_info
 
 def sub_data_handler(sub_info):
     global pos_x, pos_y 
@@ -46,9 +54,28 @@ def sendTextViaSocket(message, sock):
     
     return
 
+def sub_position_handler(p, x_new):
+    x_new[0] = p[0]
+    x_new[1] = p[1]
+    x_new[2] = p[2]
+    # print("chassis position: x: {}".format(x_new))
+
+wait_to_start_moving = True
+def move_square(ep_chassis, x_len=0.5, y_len=0.5, speed=1.0):
+    while wait_to_start_moving: time.sleep(0.1)
+    while True:
+        ep_chassis.move(x=x_len,  y=0,      z=0, xy_speed=speed).wait_for_completed()
+        ep_chassis.move(x=0,      y=y_len,  z=0, xy_speed=speed).wait_for_completed()
+        ep_chassis.move(x=-x_len, y=0,      z=0, xy_speed=speed).wait_for_completed()
+        ep_chassis.move(x=0,      y=-y_len, z=0, xy_speed=speed).wait_for_completed()
+
+def sub_distance_handler(dist_info):
+    global ir_distance
+    ir_distance = dist_info[0]
+
 
 if __name__ == '__main__':
-    useRobot = False
+    useRobot = True
 
     # # Open Socket Communication Server
     # print('Initializing Socket...')
@@ -66,7 +93,9 @@ if __name__ == '__main__':
     # print('Sending: ' + message)
     # sendTextViaSocket(message, conn)
 
-    mazeList = pd.read_csv("Labs\Final_Lab\Lab1Map.csv", header=None).to_numpy()
+    mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    mazeList[54,65] = 2
+    mazeList[11,40] = 3
 
     start = np.where(mazeList==2)
     startLoc = np.array([start[1][0],start[0][0]])
@@ -74,7 +103,7 @@ if __name__ == '__main__':
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
-    Dijkstra.ExpandWalls(mazeList,padding=4)
+    Dijkstra.ExpandWalls(mazeList,padding=3)
     Dijkstra.Draw_Maze(mazeList,ax)
     # Solve Path
     shortestPath = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
@@ -83,8 +112,8 @@ if __name__ == '__main__':
 
     pathDes = shortestPath
     timeConst = 0.25 # seconds between nodes
-    endFlag = False
-
+    
+    endFlag = True
     while endFlag == False:
         node1Time = time.time()
         firstNode = pathDes.pop(0)
@@ -109,14 +138,27 @@ if __name__ == '__main__':
             tElapse = time.time() - node1Time
 
     if (useRobot):
+        x_old = np.zeros((3,))
+        x_new = np.zeros((3,))
+        
         # Initialize Robot
         ep_robot = robot.Robot()
         ep_robot.initialize(conn_type="ap")
-        ep_chassis = ep_robot.chassis, ep_camera = ep_robot.camera, ep_gripper = ep_robot.gripper, ep_arm = ep_robot.robotic_arm
+        ep_chassis = ep_robot.chassis
+        ep_camera = ep_robot.camera
+        ep_gripper = ep_robot.gripper
+        ep_arm = ep_robot.robotic_arm
+        ep_sensor = ep_robot.sensor
+        ep_robot.chassis.sub_position(freq=50, callback=lambda p: sub_position_handler(p, x_new))
+        ep_sensor.sub_distance(freq=10,callback=sub_distance_handler)
+        ep_chassis.sub_attitude(freq=10, callback=sub_attitude_info_handler)
         ep_gripper.open()
         ep_arm.moveto(180,-20).wait_for_completed()
         ep_arm.sub_position(freq=5, callback=sub_data_handler)
         ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
+
+        #x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
+        #x.start()
         
         run_bool=True
         while(run_bool):
@@ -124,8 +166,17 @@ if __name__ == '__main__':
             frame_height, frame_width, c = frame.shape
             output = frame.copy() 
 
+            wait_to_start_moving = False
+
+            if x_old is None:
+                x_old = np.copy(x_new)
+            
+            plt.plot(int(x_new[1]*15),int(x_new[0]*15),'mx')
+            #print(x_new*15)
+            print("d:%5.2f | y: %5.2f" % (ir_distance/1000, yaw))
             cv2.imshow("out",output)
-            time.sleep(1)
+            x_old = np.copy(x_new)
+            #time.sleep(1)
             '''
             - Locate robot in the world and pickup location
                 - Rotate robot until it sees both the visual markers and pickup zone
