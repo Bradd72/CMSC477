@@ -1,6 +1,10 @@
 '''
 CMSC477 - Final Lab
 Robot responsible for picking and transfering blocks over river
+
+Left off: Have position, rotation, and distance -> need to plot obstacles on map relative to current robot loc
+    - potential every __ seconds, remove all obstacles on map and restart the obstacles
+
 '''
 import cv2
 import numpy as np
@@ -28,6 +32,9 @@ HOST = gethostbyname('0.0.0.0')
 PORT = 65439
 ACK_TEXT = 'text_received'
 
+def sub_attitude_info_handler(attitude_info):
+    global yaw, pitch, roll
+    yaw, pitch, roll = attitude_info
 
 def sub_data_handler(sub_info):
     global pos_x, pos_y 
@@ -61,6 +68,11 @@ def move_square(ep_chassis, x_len=0.5, y_len=0.5, speed=1.0):
         ep_chassis.move(x=0,      y=y_len,  z=0, xy_speed=speed).wait_for_completed()
         ep_chassis.move(x=-x_len, y=0,      z=0, xy_speed=speed).wait_for_completed()
         ep_chassis.move(x=0,      y=-y_len, z=0, xy_speed=speed).wait_for_completed()
+
+def sub_distance_handler(dist_info):
+    global ir_distance
+    ir_distance = dist_info[0]
+
 
 if __name__ == '__main__':
     useRobot = True
@@ -136,14 +148,17 @@ if __name__ == '__main__':
         ep_camera = ep_robot.camera
         ep_gripper = ep_robot.gripper
         ep_arm = ep_robot.robotic_arm
+        ep_sensor = ep_robot.sensor
         ep_robot.chassis.sub_position(freq=50, callback=lambda p: sub_position_handler(p, x_new))
+        ep_sensor.sub_distance(freq=10,callback=sub_distance_handler)
+        ep_chassis.sub_attitude(freq=10, callback=sub_attitude_info_handler)
         ep_gripper.open()
         ep_arm.moveto(180,-20).wait_for_completed()
         ep_arm.sub_position(freq=5, callback=sub_data_handler)
         ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
 
-        x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
-        x.start()
+        #x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
+        #x.start()
         
         run_bool=True
         while(run_bool):
@@ -157,7 +172,8 @@ if __name__ == '__main__':
                 x_old = np.copy(x_new)
             
             plt.plot(int(x_new[1]*15),int(x_new[0]*15),'mx')
-            print(x_new*15)
+            #print(x_new*15)
+            print("d:%5.2f | y: %5.2f" % (ir_distance/1000, yaw))
             cv2.imshow("out",output)
             x_old = np.copy(x_new)
             #time.sleep(1)
