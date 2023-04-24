@@ -16,6 +16,7 @@
 
 import robomaster
 from robomaster import robot
+import time
 
 
 def sub_attitude_info_handler(attitude_info):
@@ -25,14 +26,15 @@ def sub_attitude_info_handler(attitude_info):
 
 if __name__ == '__main__':
     ep_robot = robot.Robot()
-    ep_robot.initialize(conn_type="sta")
+    ep_robot.initialize(conn_type="ap")
 
     ep_chassis = ep_robot.chassis
 
     # 订阅底盘姿态信息
     ep_chassis.sub_attitude(freq=10, callback=sub_attitude_info_handler)
-    ep_chassis.move(x=0, y=0, z=90).wait_for_completed()
-    ep_chassis.move(x=0, y=0, z=-90).wait_for_completed()
+    # ep_chassis.move(x=0, y=0, z=90).wait_for_completed()
+    # ep_chassis.move(x=0, y=0, z=-90).wait_for_completed()
+    time.sleep(10)
     ep_chassis.unsub_attitude()
 
     ep_robot.close()
