@@ -5,10 +5,10 @@ import time
 
 
 
-K_p = .45;K_i = .05;K_d=0;K_p_z = 45;K_i_z = .5;K_d_z = 5
-x_error=0;x_integrator=0;x_response=0;est_x=0
-y_error=0;y_integrator=0;y_response=0;est_y=0
-z_error=0;z_integrator=0;z_response=0;est_heading=0
+K_p = .05;K_i = .05;K_d=0;K_p_z = 5;K_i_z = 2;K_d_z = 0
+x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
+y_error=0;y_diff=0;y_integrator=0;y_response=0;est_y=0
+head_error=0;head_diff=0;head_integrator=0;z_response=0;est_heading=0
 error_norm=np.ones((50,1))*100;error_tol=.010;error_count=0
 prev_time=time.time()
 yaw=0; pitch=0; roll=0
@@ -30,9 +30,10 @@ def sub_position_handler(position_info):
     print("chassis position: x:{0}, y:{1}, z:{2}  x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}".format(robo_x, robo_y, z,x_response,y_response,np.mean(error_norm),z_response))
 
 def odom_pid(des_X,des_Y,des_head):
-    global y_diff,x_diff,y_integrator,x_integrator,y_error,x_error,y_response,x_response,error_count,error_norm,prev_time
+    global y_diff,x_diff,head_diff,y_integrator,x_integrator,head_integrator,y_error,x_error,head_error,y_response,x_response,z_response,error_count,error_norm,prev_time
     y_prev=y_error
     x_prev=x_error
+    head_prev=head_error
     head_error = (est_heading - des_head)
     x_error = (est_y - des_Y)*-1
     y_error = (est_x - des_X)
@@ -44,10 +45,14 @@ def odom_pid(des_X,des_Y,des_head):
         y_diff = (y_error - y_prev) / time_step
         x_integrator +=x_error*time_step  
         x_diff = (x_error - x_prev) / time_step
+        head_integrator +=head_error*time_step  
+        head_diff = (head_error - head_prev) / time_step
+        
     else:
-        y_integrator = 0; y_diff = 0; x_integrator = 0; x_diff = 0
+        y_integrator = 0; y_diff = 0; x_integrator = 0; x_diff = 0; head_integrator=0; head_diff=0
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
+    z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
     if error_count>=len(error_norm)-1:
         error_count=0
     else:
@@ -91,13 +96,14 @@ if __name__ == '__main__':
         est_x=robo_x+initial_x
         est_y=robo_y+initial_y
         # print("robo_x: {:.2f}, robo_y: {:.2f}, x: {:.2f}, y: {:.2f}, heading: {:.2f}".format(robo_x,robo_y,est_x,est_y,est_heading))
-        print("des_x:{}, des_y:{}, x:{:.2f}, y:{:.2f}, heading:{:.2f},  x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}".format(path[path_num][0],path[path_num][1],est_x, est_y,est_heading,x_response,y_response,np.mean(error_norm),z_response))
-        # robo_x_speed = x_response*np.cos(est_heading)-y_response*np.sin(est_heading)
-        # robo_y_speed = x_response*np.sin(est_heading)-y_response*np.cos(est_heading)
+        # print("des_x:{}, des_y:{}, x:{:.2f}, y:{:.2f}, heading:{:.2f},  x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}".format(path[path_num][0],path[path_num][1],est_x, est_y,est_heading,x_response,y_response,np.mean(error_norm),z_response))
+        robo_x_speed = -1*(x_response/max(np.cos(est_heading),.01)+y_response/max(np.sin(est_heading),.01))
+        robo_y_speed = 1*(x_response/max(np.sin(est_heading),.01)+y_response/max(np.cos(est_heading),.01))
+        print("des_x:{}, des_y:{}, x:{:.2f}, y:{:.2f}, heading:{:.2f},  drive_x:{:.2f}, drive_y: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}".format(path[path_num][0],path[path_num][1],est_x, est_y,est_heading,robo_x_speed,robo_y_speed,np.mean(error_norm),z_response))
         # robo_x_speed = 0
         # robo_y_speed = .1
-        z_response=0
-        # ep_chassis.drive_speed(-1*x_response,-1*y_response,z_response,timeout=.1)
+        # z_response=0
+        ep_chassis.drive_speed(1*robo_x_speed,1*robo_y_speed,-1*z_response,timeout=.1)
         # ep_chassis.drive_speed(.1,.1,0,timeout=.1)
         # i+=1
 
