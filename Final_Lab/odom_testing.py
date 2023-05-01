@@ -5,11 +5,11 @@ import time
 
 
 
-K_p = .05;K_i = .05;K_d=0;K_p_z = 5;K_i_z = 2;K_d_z = 0
+K_p = .35;K_i = .25;K_d=0.1;K_p_z = 1;K_i_z = .5;K_d_z = 0
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
 y_error=0;y_diff=0;y_integrator=0;y_response=0;est_y=0
 head_error=0;head_diff=0;head_integrator=0;z_response=0;est_heading=0
-error_norm=np.ones((50,1))*100;error_tol=.010;error_count=0
+error_norm=np.ones((50,1))*100;error_tol=.025;error_count=0
 prev_time=time.time()
 yaw=0; pitch=0; roll=0
 robo_x=0;robo_y=0;delta_x=0;delta_y=0
@@ -35,8 +35,10 @@ def odom_pid(des_X,des_Y,des_head):
     x_prev=x_error
     head_prev=head_error
     head_error = (est_heading - des_head)
-    x_error = (est_y - des_Y)*-1
-    y_error = (est_x - des_X)
+    # x_error = (est_y - des_Y)*-1
+    # y_error = (est_x - des_X)
+    y_error = (est_y - des_Y)*1
+    x_error = (est_x - des_X)*1
     time_ = time.time()
     time_step = time_ - prev_time
     prev_time = time_
@@ -49,6 +51,7 @@ def odom_pid(des_X,des_Y,des_head):
         head_diff = (head_error - head_prev) / time_step
         
     else:
+        print("long wait")
         y_integrator = 0; y_diff = 0; x_integrator = 0; x_diff = 0; head_integrator=0; head_diff=0
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
@@ -59,7 +62,7 @@ def odom_pid(des_X,des_Y,des_head):
         error_count+=1
 
     head_error
-    error_norm[error_count]=np.linalg.norm((x_error,y_error,head_error*10))
+    error_norm[error_count]=np.linalg.norm((x_error,y_error,head_error*.125))
     if np.mean(error_norm)<error_tol: #
         error_norm=np.ones((50,1))*100
         return True
@@ -77,35 +80,29 @@ if __name__ == '__main__':
     ep_sensor.sub_distance(freq=10,callback=sub_distance_handler)
 
     initial_x=0;initial_y=0;initial_head=0
-    path = [(0,.1,0),(0,.2,0)]
+    # path = [(0,.1,0),(0,.2,30),(.2,.2,0),(.2,0,30),(0,0,0)]
     # path = [(0,0,0),(0,.1,0),(.1,.1,0),(.1,0,0),(0,0,0)]
+    path = [(0,0,0),(0,.5,80),(.5,.5,0),(.5,0,30),(0,0,0)]
     path_num=0
 
     run_bool = True
-    des_x=10
-    des_y=20
-    des_head = 0
     i=0
     
 
     while(path_num<len(path)):
-    # while(i<1000000000):
         if odom_pid(path[path_num][0],path[path_num][1],path[path_num][2]):
             path_num+=1
         est_heading=yaw+initial_head
         est_x=robo_x+initial_x
         est_y=robo_y+initial_y
-        # print("robo_x: {:.2f}, robo_y: {:.2f}, x: {:.2f}, y: {:.2f}, heading: {:.2f}".format(robo_x,robo_y,est_x,est_y,est_heading))
-        # print("des_x:{}, des_y:{}, x:{:.2f}, y:{:.2f}, heading:{:.2f},  x_response:{:.2f},  y_response: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}".format(path[path_num][0],path[path_num][1],est_x, est_y,est_heading,x_response,y_response,np.mean(error_norm),z_response))
-        robo_x_speed = -1*(x_response/max(np.cos(est_heading),.01)+y_response/max(np.sin(est_heading),.01))
-        robo_y_speed = 1*(x_response/max(np.sin(est_heading),.01)+y_response/max(np.cos(est_heading),.01))
-        print("des_x:{}, des_y:{}, x:{:.2f}, y:{:.2f}, heading:{:.2f},  drive_x:{:.2f}, drive_y: {:.2f},  error_norm: {:.2f}, z_response: {:.2f}".format(path[path_num][0],path[path_num][1],est_x, est_y,est_heading,robo_x_speed,robo_y_speed,np.mean(error_norm),z_response))
-        # robo_x_speed = 0
-        # robo_y_speed = .1
-        # z_response=0
-        ep_chassis.drive_speed(1*robo_x_speed,1*robo_y_speed,-1*z_response,timeout=.1)
-        # ep_chassis.drive_speed(.1,.1,0,timeout=.1)
-        # i+=1
+        est_heading_rad = np.deg2rad(est_heading)
+        alpha_rad = np.arctan2(y_response,x_response)
+        response_mag = np.linalg.norm((x_response,y_response))
+        robo_x_speed = response_mag*np.cos(alpha_rad-est_heading_rad)
+        robo_y_speed = response_mag*np.sin(alpha_rad-est_heading_rad)
+        print("des: ({}, {}, {}) est:({:.2f}, {:.2f}, {:.2f})  response:({:.2f}, {:.2f}, {:.2f}) error: {:.2f} {:.2f} {:.2f}".format(path[path_num][0],path[path_num][1],path[path_num][2],est_x, est_y,est_heading,robo_x_speed,robo_y_speed,z_response,np.mean(error_norm),alpha_rad,response_mag))
+        ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,-1*z_response,timeout=.1)
+        time.sleep(.01)
 
 
 
