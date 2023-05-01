@@ -17,7 +17,8 @@ random.seed('Final Lab',version=2)
 # 8 = Robot
 # [x, y, distance]
 
-def Dijkstra(maze, s):
+def Dijkstra(maze2, s):
+    maze = np.copy(maze2)
     nodeDistances = float(16384)*np.ones(maze.shape, dtype=int)
 
     startTime = time.time()
@@ -32,7 +33,8 @@ def Dijkstra(maze, s):
         currNode[2] = nodeDistances[currNode[1],currNode[0]]
         
         # Check surrounding 8 nodes
-        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:   
+        #for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:   
+        for i in [[0,-1,1.0],[-1,0,1.0],[1,0,1.0],[0,1,1.0]]:
             adjNode = [currNode[0]+i[0],currNode[1]+i[1],currNode[2]+i[2]]
             # end node: quit
             if maze[adjNode[1],adjNode[0]] == 3:    

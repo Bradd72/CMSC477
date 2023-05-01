@@ -15,6 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import random
 import threading
+
 random.seed('Final Lab',version=2)
 
 import Dijkstra
@@ -94,11 +95,12 @@ if __name__ == '__main__':
     # sendTextViaSocket(message, conn)
 
     mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
-    mazeList[54,65] = 2
-    mazeList[11,40] = 3
+    mazeList[1,2] = 2
+    mazeList[55,5] = 3     # mazeList[y,x]
 
     start = np.where(mazeList==2)
     startLoc = np.array([start[1][0],start[0][0]])
+    print(startLoc)
     # Start interactive plot
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
@@ -161,6 +163,7 @@ if __name__ == '__main__':
         #x.start()
         
         run_bool=True
+        framecount = 1
         while(run_bool):
             frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
             frame_height, frame_width, c = frame.shape
@@ -171,11 +174,23 @@ if __name__ == '__main__':
             if x_old is None:
                 x_old = np.copy(x_new)
             
-            plt.plot(int(x_new[1]*15),int(x_new[0]*15),'mx')
-            #print(x_new*15)
-            print("d:%5.2f | y: %5.2f" % (ir_distance/1000, yaw))
+            plt.plot(x_new[0]*15,-x_new[1]*15,'m.')
+            #print("d:%5.2f | y: %5.2f" % (ir_distance/1000, yaw))
+            objectLoc = [x_new[0]+np.cos(np.deg2rad(yaw))*ir_distance/1000,x_new[0]+np.sin(np.deg2rad(yaw))*ir_distance/1000]
+            if (ir_distance/1000 <= 1.5):
+                if (objectLoc[0] >= 0 and objectLoc[1] >= 0):
+                    plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='#9c9c9c',marker='x')
+                    mazeList[int(15*(objectLoc[1])),int(15*(objectLoc[0]))] = 7     # mazeList[y,x]
             cv2.imshow("out",output)
             x_old = np.copy(x_new)
+
+            if (framecount%25 == 0):
+                plt.cla()
+                print("clearing")
+                Dijkstra.Draw_Maze(mazeList,ax)
+                # Solve Path
+                shortestPath = Dijkstra.Dijkstra(mazeList, [int(15*x_new[0]),int(15*x_new[1]),0])
+                Dijkstra.PlotPath(shortestPath)
             #time.sleep(1)
             '''
             - Locate robot in the world and pickup location
@@ -203,6 +218,7 @@ if __name__ == '__main__':
                 - Locate other robot and align with it
                 - Move forward and communicate states for block handoff
             '''
+            framecount += 1
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
