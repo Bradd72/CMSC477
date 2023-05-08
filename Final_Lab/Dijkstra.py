@@ -15,6 +15,8 @@ random.seed('Final Lab',version=2)
 # 6 = Found Path
 # 7/70 = Wall Boundary
 # 8 = Robot
+# 9 = Obstacle
+# 10 = Obstacle Boundary
 # [x, y, distance]
 
 def Dijkstra(maze2, s):
@@ -33,8 +35,8 @@ def Dijkstra(maze2, s):
         currNode[2] = nodeDistances[currNode[1],currNode[0]]
         
         # Check surrounding 8 nodes
-        #for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:   
-        for i in [[0,-1,1.0],[-1,0,1.0],[1,0,1.0],[0,1,1.0]]:
+        for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:   
+        #for i in [[0,-1,1.0],[-1,0,1.0],[1,0,1.0],[0,1,1.0]]:
             adjNode = [currNode[0]+i[0],currNode[1]+i[1],currNode[2]+i[2]]
             # end node: quit
             if maze[adjNode[1],adjNode[0]] == 3:    
@@ -118,6 +120,35 @@ def ExpandWalls(maze,padding):
                     maze[h,w] = 7
     return
 
+def SetObstacles(maze,Loc,padding=1):
+    '''
+    Creates a 1 unit wide boundary around all known walls
+    '''
+    if maze[Loc[1],Loc[0]] == 0 or maze[Loc[1],Loc[0]] == 10: # Wall
+        plt.plot(Loc[0],-Loc[1],c='r',marker='x')
+        maze[Loc[1],Loc[0]] = 9     # mazeList[y,x]
+
+        for i in range(2*padding+1):
+            for j in range(2*padding+1):
+                if maze[Loc[1]-i+padding,Loc[0]-j+padding] == 0:
+                    maze[Loc[1]-i+padding,Loc[0]-j+padding] = 10
+
+    return
+
+
+def RemoveObstacles(maze):
+    '''
+    Creates a 1 unit wide boundary around all known walls
+    '''
+    height, width = maze.shape
+    for h in range(height-1):
+        for w in range(width-1):
+            if maze[h,w] == 9 or maze[h,w] == 10: # Wall
+                if h == 0 or w == 0:
+                    continue
+                maze[h,w] = 0
+    return
+
 def Draw_Maze(mazelist, ax):
     startTime = time.time()
     # Loop over all points in maze
@@ -125,6 +156,8 @@ def Draw_Maze(mazelist, ax):
     Wally = []
     Boundx = []
     Boundy = []
+    Obstx = []
+    Obsty = []
     rowCounter = 0
     entryCounter = 0
     for row in mazelist:
@@ -136,6 +169,11 @@ def Draw_Maze(mazelist, ax):
             elif entry == 7:    # Wall Boundary
                 Boundx.append(entryCounter)
                 Boundy.append(-rowCounter)
+            elif entry == 9:    # Wall Boundary
+                Obstx.append(entryCounter)
+                Obsty.append(-rowCounter)
+            elif entry == 10:    # Start
+                ax.plot(entryCounter, -rowCounter, 'r.')
             elif entry == 2:    # Start
                 ax.plot(entryCounter, -rowCounter, 'bo')
             elif entry == 3:    # End
@@ -145,6 +183,7 @@ def Draw_Maze(mazelist, ax):
         entryCounter = 0
     plt.scatter(Wallx,Wally,c='k',marker='s')
     plt.scatter(Boundx,Boundy,c='#9c9c9c',marker='s')
+    plt.scatter(Obstx,Obsty,c='r',marker='s')
 
     ax.axis('equal')
     calcTime = time.time()-startTime

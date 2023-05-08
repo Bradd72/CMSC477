@@ -2,8 +2,7 @@
 CMSC477 - Final Lab
 Robot responsible for picking and transfering blocks over river
 
-Left off: Have position, rotation, and distance -> need to plot obstacles on map relative to current robot loc
-    - potential every __ seconds, remove all obstacles on map and restart the obstacles
+Left off: 
 
 '''
 import cv2
@@ -95,12 +94,13 @@ if __name__ == '__main__':
     # sendTextViaSocket(message, conn)
 
     mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
-    mazeList[1,2] = 2
+    height, width = mazeList.shape
+    mazeList[55,10] = 2
     mazeList[55,5] = 3     # mazeList[y,x]
 
     start = np.where(mazeList==2)
     startLoc = np.array([start[1][0],start[0][0]])
-    print(startLoc)
+    oldxloc = [startLoc[0],startLoc[1],0]
     # Start interactive plot
     plt.ion()
     fig = plt.figure(figsize=(10, 10))
@@ -115,30 +115,6 @@ if __name__ == '__main__':
     pathDes = shortestPath
     timeConst = 0.25 # seconds between nodes
     
-    endFlag = True
-    while endFlag == False:
-        node1Time = time.time()
-        firstNode = pathDes.pop(0)
-        prevdesLoc = firstNode
-        if mazeList[firstNode[1],firstNode[0]] == 3:
-            pathDes.append(firstNode)
-        else:
-            secondNode = pathDes[0]
-            nodeOffset = [secondNode[0]-firstNode[0],secondNode[1]-firstNode[1]]
-            if abs(nodeOffset[0])+abs(nodeOffset[1]) > 1: # making diagonals take equal time to edges
-                nodeMultiplier = np.sqrt(2)
-            else:
-                nodeMultiplier = 1
-
-        tElapse = time.time() - node1Time
-        while tElapse < timeConst*nodeMultiplier:
-            desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
-            
-            ax.plot([prevdesLoc[0],desLoc[0]],[-prevdesLoc[1],-desLoc[1]],'g')
-            plt.pause(1e-10)
-            prevdesLoc = desLoc
-            tElapse = time.time() - node1Time
-
     if (useRobot):
         x_old = np.zeros((3,))
         x_new = np.zeros((3,))
@@ -171,26 +147,64 @@ if __name__ == '__main__':
 
             wait_to_start_moving = False
 
+            # Path to follow
+            followPath = True
+            if (followPath):
+                node1Time = time.time()
+                firstNode = pathDes.pop(0)
+                prevdesLoc = firstNode
+                if mazeList[firstNode[1],firstNode[0]] == 3:
+                    pathDes.append(firstNode)
+                else:
+                    secondNode = pathDes[0]
+                    nodeOffset = [secondNode[0]-firstNode[0],secondNode[1]-firstNode[1]]
+                    if abs(nodeOffset[0])+abs(nodeOffset[1]) > 1: # making diagonals take equal time to edges
+                        nodeMultiplier = np.sqrt(2)
+                    else:
+                        nodeMultiplier = 1
+
+                tElapse = time.time() - node1Time
+                while tElapse < timeConst*nodeMultiplier:
+                    desLoc = [firstNode[0]+nodeOffset[0]*tElapse/(timeConst*nodeMultiplier),firstNode[1]+nodeOffset[1]*tElapse/(timeConst*nodeMultiplier)]
+                    
+                    ax.plot([prevdesLoc[0],desLoc[0]],[-prevdesLoc[1],-desLoc[1]],'g')
+                    plt.pause(1e-10)
+                    prevdesLoc = desLoc
+                    tElapse = time.time() - node1Time
+
+
+            # Other stuff
             if x_old is None:
                 x_old = np.copy(x_new)
             
             plt.plot(x_new[0]*15,-x_new[1]*15,'m.')
             #print("d:%5.2f | y: %5.2f" % (ir_distance/1000, yaw))
             objectLoc = [x_new[0]+np.cos(np.deg2rad(yaw))*ir_distance/1000,x_new[0]+np.sin(np.deg2rad(yaw))*ir_distance/1000]
-            if (ir_distance/1000 <= 1.5):
-                if (objectLoc[0] >= 0 and objectLoc[1] >= 0):
-                    plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='#9c9c9c',marker='x')
-                    mazeList[int(15*(objectLoc[1])),int(15*(objectLoc[0]))] = 7     # mazeList[y,x]
+            if (ir_distance/1000 <= 3):
+                if (objectLoc[0] >= 0 and objectLoc[1] >= 0 and int(15*objectLoc[1]) < height and int(15*objectLoc[0]) < width):
+                    #plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='r',marker='x')
+                    #mazeList[int(15*(objectLoc[1])),int(15*(objectLoc[0]))] = 9     # mazeList[y,x]
+                    Dijkstra.SetObstacles(mazeList,[int(15*objectLoc[0]),int(15*objectLoc[1])],2)
             cv2.imshow("out",output)
             x_old = np.copy(x_new)
 
+            if (framecount%250 == 0):
+                plt.cla()
+                print("clearing")
+                Dijkstra.RemoveObstacles(mazeList)
+                Dijkstra.Draw_Maze(mazeList,ax)
+                framecount = 0
             if (framecount%25 == 0):
                 plt.cla()
                 print("clearing")
                 Dijkstra.Draw_Maze(mazeList,ax)
                 # Solve Path
-                shortestPath = Dijkstra.Dijkstra(mazeList, [int(15*x_new[0]),int(15*x_new[1]),0])
-                Dijkstra.PlotPath(shortestPath)
+                if (int(15*x_new[0]) < 1 or int(15*x_new[1]) < 1):
+                    pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
+                else:
+                    pathDes = Dijkstra.Dijkstra(mazeList, [int(15*x_new[0]),int(15*x_new[1]),0])
+                    oldxloc = x_new
+                Dijkstra.PlotPath(pathDes)
             #time.sleep(1)
             '''
             - Locate robot in the world and pickup location
