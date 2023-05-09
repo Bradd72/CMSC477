@@ -36,9 +36,6 @@ def sub_attitude_info_handler(attitude_info):
     global yaw, pitch, roll
     yaw, pitch, roll = attitude_info
 
-def sub_data_handler(sub_info):
-    global pos_x, pos_y 
-    pos_x, pos_y = sub_info
 
 def sendTextViaSocket(message, sock):
     encodedMessage = bytes(message, 'utf-8')        # encode the text message
@@ -131,8 +128,7 @@ if __name__ == '__main__':
         ep_sensor.sub_distance(freq=10,callback=sub_distance_handler)
         ep_chassis.sub_attitude(freq=10, callback=sub_attitude_info_handler)
         ep_gripper.open()
-        ep_arm.moveto(180,-20).wait_for_completed()
-        ep_arm.sub_position(freq=5, callback=sub_data_handler)
+        ep_arm.moveto(180,-80).wait_for_completed()
         ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
 
         #x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
