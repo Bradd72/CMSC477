@@ -35,25 +35,25 @@ ACK_TEXT = 'text_received'
 # Map Gobals
 METERS_TO_MAP = 15
 INITIAL_LOC = (14.5/3.281,2/3.281)
-BLOCK_PICKUP_LOC = (14/3.281,7/3.281)
+BLOCK_PICKUP_LOC = (14.5/3.281,7/3.281)
 BLOCK_PLACE_LOC = (9/3.281,7/3.281)
 # Centroid PID Globals
 K_p_pix=.0005; K_i_pix=.000002; K_d_pix=0; cX=0; cY=0
 error_norm_pix=np.ones((20,1))*100;error_tol_pix=15
 y_pix_diff=0;x_pix_diff=0;y_pix_integrator=0;x_pix_integrator=0;y_pix_error=0;x_pix_error=0;y_response=0;x_response=0;error_count_pix=0;prev_time=time.time()
 # Map PID Globals
-K_p = .4;K_i = .25;K_d=0.1;K_p_z = 1;K_i_z = .5;K_d_z = 0
+K_p = .35;K_i = .25;K_d=0.2;K_p_z = 1.5;K_i_z = .5;K_d_z = .1
 initial_x=INITIAL_LOC[0];initial_y=INITIAL_LOC[1];initial_head=0
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
 y_error=0;y_diff=0;y_integrator=0;y_response=0;est_y=0
 head_error=0;head_diff=0;head_integrator=0;z_response=0
-error_norm=np.ones((50,1))*50;error_count=0;error_tol=.075
+error_norm=np.ones((25,1))*25;error_count=0;error_tol=.15
 prev_time=time.time()
 est_heading=initial_head;est_heading_rad=np.deg2rad(est_heading);est_x=initial_x;est_y=initial_y
 
 def sub_attitude_info_handler(attitude_info):
     global est_heading_rad,initial_head,est_heading
-    yaw = attitude_info[0]
+    yaw = -attitude_info[0]
     est_heading=yaw+initial_head;est_heading_rad=np.deg2rad(est_heading)
 
 def sendTextViaSocket(message, sock):
@@ -87,6 +87,8 @@ def odom_pid(des_X,des_Y,des_head):
     x_prev=x_error
     head_prev=head_error
     head_error = (est_heading - des_head)
+    if abs(head_error) > 180:
+        head_error = np.sign(des_head)*(360-(est_heading-des_head))
     y_error = (est_y - des_Y)*1
     x_error = (est_x - des_X)*1
     time_ = time.time()
@@ -106,15 +108,16 @@ def odom_pid(des_X,des_Y,des_head):
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
     z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
+    if head_error>20:
+        z_response*=.1
     if error_count>=len(error_norm)-1:
         error_count=0
     else:
         error_count+=1
 
-    head_error
     error_norm[error_count]=np.linalg.norm((x_error,y_error,head_error*.125))
     if np.mean(error_norm)<error_tol: #
-        error_norm=np.ones((50,1))*50
+        error_norm=np.ones((25,1))*25
         return True
     else:
         return False
@@ -251,8 +254,8 @@ if __name__ == '__main__':
     # print('Sending: ' + message)
     # sendTextViaSocket(message, conn)
 
-    # mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
-    mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    #mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     height, width = mazeList.shape
     mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 2
     mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
@@ -302,8 +305,8 @@ if __name__ == '__main__':
     while(run_bool): 
 
         # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
-        if (path_count+1)>len(pathDes):
-            while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],np.pi)):
+        if (path_count+5)>len(pathDes):
+            while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],170)):
                 ep_chassis.drive_speed(0,0,-1*z_response,timeout=.1)
                 time.sleep(.01)
             ep_chassis.drive_speed(0,0,0,timeout=.1)
@@ -311,45 +314,47 @@ if __name__ == '__main__':
             pickup_block(color_range)
             break
         # Get desired Heading along path
-        tangent_vector = [est_x-pathDes[path_count][0]/METERS_TO_MAP,est_y-pathDes[path_count][1]/METERS_TO_MAP]
-        tangent_angle = (np.arctan2(tangent_vector[1],-1*tangent_vector[0])+est_heading_rad)/2
-        # tangent_angle=0
-        if odom_pid(pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP,np.rad2deg(tangent_angle)):
-            path_count+=1
+        tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-est_x,pathDes[path_count+1][1]/METERS_TO_MAP-est_y]
+        tangent_angle_rad = (-np.arctan2(tangent_vector[1],tangent_vector[0]))
+        print(np.rad2deg(tangent_angle_rad))
+        #tangent_angle_rad=0
+        if odom_pid(pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP,np.rad2deg(tangent_angle_rad)):
+            path_count+=2
 
         alpha_rad = np.arctan2(y_response,x_response)
         response_mag = np.linalg.norm((x_response,y_response))
-        robo_x_speed = response_mag*np.cos(alpha_rad-est_heading_rad)
-        robo_y_speed = response_mag*np.sin(alpha_rad-est_heading_rad)
-        ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,-1*z_response,timeout=.1)
+        robo_x_speed = response_mag*np.cos(alpha_rad+est_heading_rad)
+        robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
+        ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
         # Other stuff
         plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m.') # plot current position
         #print("d:%5.2f | y: %5.2f" % (ir_distance_m, yaw))
-        if (ir_distance_m <= 3):
-            objectLoc = [x_new[0]+np.cos(est_heading_rad)*ir_distance_m,x_new[0]+np.sin(est_heading_rad)*ir_distance_m]
-            if (objectLoc[0] >= 0 and objectLoc[1] >= 0 and int(15*objectLoc[1]) < height and int(15*objectLoc[0]) < width):
-                #plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='r',marker='x')
-                #mazeList[int(15*(objectLoc[1])),int(15*(objectLoc[0]))] = 9     # mazeList[y,x]
-                Dijkstra.SetObstacles(mazeList,[int(15*objectLoc[0]),int(15*objectLoc[1])],2)
-        if (framecount%250 == 0):
-            plt.cla()
-            print("Full Clear")
-            Dijkstra.RemoveObstacles(mazeList)
-            Dijkstra.Draw_Maze(mazeList,ax)
-            framecount = 0
-        elif (framecount%25 == 0):
-            path_count=0
-            plt.cla()
-            print("Clear")
-            Dijkstra.Draw_Maze(mazeList,ax)
-            # Solve Path
-            # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
-            #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
-            # else:
-            #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
-            # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
-            pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[0]),int(pathDes[1]),0])
-            Dijkstra.PlotPath(pathDes)
+        # if (ir_distance_m <= 3):
+        #     #objectLoc = [x_new[0]+np.cos(est_heading_rad)*ir_distance_m,x_new[0]+np.sin(est_heading_rad)*ir_distance_m]
+        #     objectLoc = [est_x+np.cos(est_heading_rad)*ir_distance_m,est_x+np.sin(est_heading_rad)*ir_distance_m]
+        #     if (objectLoc[0] >= 0 and objectLoc[1] >= 0 and int(15*objectLoc[1]) < height and int(15*objectLoc[0]) < width):
+        #         #plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='r',marker='x')
+        #         #mazeList[int(15*(objectLoc[1])),int(15*(objectLoc[0]))] = 9     # mazeList[y,x]
+        #         Dijkstra.SetObstacles(mazeList,[int(15*objectLoc[0]),int(15*objectLoc[1])],2)
+        # if (framecount%250 == 0):
+        #     plt.cla()
+        #     print("Full Clear")
+        #     Dijkstra.RemoveObstacles(mazeList)
+        #     Dijkstra.Draw_Maze(mazeList,ax)
+        #     framecount = 0
+        # elif (framecount%25 == 0):
+        #     path_count=0
+        #     plt.cla()
+        #     print("Clear")
+        #     Dijkstra.Draw_Maze(mazeList,ax)
+        #     # Solve Path
+        #     # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
+        #     #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
+        #     # else:
+        #     #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
+        #     # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
+        #     pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[0][0]),int(pathDes[0][1]),0])
+        #     Dijkstra.PlotPath(pathDes)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 

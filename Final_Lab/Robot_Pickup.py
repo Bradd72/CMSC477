@@ -92,7 +92,7 @@ if __name__ == '__main__':
 
     mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     height, width = mazeList.shape
-    mazeList[55,10] = 2
+    mazeList[25,10] = 2
     mazeList[55,5] = 3     # mazeList[y,x]
 
     start = np.where(mazeList==2)
