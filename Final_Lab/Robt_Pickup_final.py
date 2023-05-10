@@ -42,7 +42,9 @@ K_p_pix=.0005; K_i_pix=.000002; K_d_pix=0; cX=0; cY=0
 error_norm_pix=np.ones((20,1))*100;error_tol_pix=15
 y_pix_diff=0;x_pix_diff=0;y_pix_integrator=0;x_pix_integrator=0;y_pix_error=0;x_pix_error=0;y_response=0;x_response=0;error_count_pix=0;prev_time=time.time()
 # Map PID Globals
-K_p = .35;K_i = .25;K_d=0.2;K_p_z = 1.5;K_i_z = .5;K_d_z = .1
+K_p = .35;K_i = .25;K_d=0.2
+# K_p_z = 1.5;K_i_z = .5;K_d_z = .01
+K_p_z = .5;K_i_z = .05;K_d_z = .001
 initial_x=INITIAL_LOC[0];initial_y=INITIAL_LOC[1];initial_head=0
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
 y_error=0;y_diff=0;y_integrator=0;y_response=0;est_y=0
@@ -108,8 +110,8 @@ def odom_pid(des_X,des_Y,des_head):
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
     z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
-    if head_error>20:
-        z_response*=.1
+    if abs(head_error)<5:
+        z_response=(head_error*K_p_z+5*head_integrator*K_i_z+head_diff*K_d_z)
     if error_count>=len(error_norm)-1:
         error_count=0
     else:
@@ -314,9 +316,10 @@ if __name__ == '__main__':
             pickup_block(color_range)
             break
         # Get desired Heading along path
-        tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-est_x,pathDes[path_count+1][1]/METERS_TO_MAP-est_y]
+        # tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-est_x,pathDes[path_count+1][1]/METERS_TO_MAP-est_y]
+        tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-pathDes[path_count+0][0]/METERS_TO_MAP,pathDes[path_count+1][1]/METERS_TO_MAP-pathDes[path_count+0][1]/METERS_TO_MAP]
         tangent_angle_rad = (-np.arctan2(tangent_vector[1],tangent_vector[0]))
-        print(np.rad2deg(tangent_angle_rad))
+        # print(np.rad2deg(tangent_angle_rad))
         #tangent_angle_rad=0
         if odom_pid(pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP,np.rad2deg(tangent_angle_rad)):
             path_count+=2
