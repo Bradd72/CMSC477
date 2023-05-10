@@ -5,7 +5,7 @@ import time
 
 
 
-K_p = .35;K_i = .25;K_d=0.1;K_p_z = 1;K_i_z = .5;K_d_z = 0
+K_p = .35;K_i = .25;K_d=0.2;K_p_z = 1.5;K_i_z = .5;K_d_z = .1
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
 y_error=0;y_diff=0;y_integrator=0;y_response=0;est_y=0
 head_error=0;head_diff=0;head_integrator=0;z_response=0;est_heading=0
@@ -35,6 +35,8 @@ def odom_pid(des_X,des_Y,des_head):
     x_prev=x_error
     head_prev=head_error
     head_error = (est_heading - des_head)
+    if abs(head_error)>180:
+        head_error = np.sign(des_head)*(360-(est_heading - des_head))
     # x_error = (est_y - des_Y)*-1
     # y_error = (est_x - des_X)
     y_error = (est_y - des_Y)*1
@@ -47,15 +49,15 @@ def odom_pid(des_X,des_Y,des_head):
         y_diff = (y_error - y_prev) / time_step
         x_integrator +=x_error*time_step  
         x_diff = (x_error - x_prev) / time_step
-        head_integrator +=head_error*time_step  
-        head_diff = (head_error - head_prev) / time_step
-        
     else:
         print("long wait")
         y_integrator = 0; y_diff = 0; x_integrator = 0; x_diff = 0; head_integrator=0; head_diff=0
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
-    z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
+    if head_error<20:
+        z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
+    else:
+        z_response = (head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z)*.1
     if error_count>=len(error_norm)-1:
         error_count=0
     else:
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     initial_x=0;initial_y=0;initial_head=0
     # path = [(0,.1,0),(0,.2,30),(.2,.2,0),(.2,0,30),(0,0,0)]
     # path = [(0,0,0),(0,.1,0),(.1,.1,0),(.1,0,0),(0,0,0)]
-    path = [(0,0,0),(0,.5,80),(.5,.5,0),(.5,0,30),(0,0,0)]
+    path = [(0,0,170),(0,.5,-170),(.5,.5,0),(.5,0,30),(0,0,0)]
     path_num=0
 
     run_bool = True
@@ -92,16 +94,16 @@ if __name__ == '__main__':
     while(path_num<len(path)):
         if odom_pid(path[path_num][0],path[path_num][1],path[path_num][2]):
             path_num+=1
-        est_heading=yaw+initial_head
+        est_heading=-1*yaw+initial_head
         est_x=robo_x+initial_x
         est_y=robo_y+initial_y
         est_heading_rad = np.deg2rad(est_heading)
         alpha_rad = np.arctan2(y_response,x_response)
         response_mag = np.linalg.norm((x_response,y_response))
-        robo_x_speed = response_mag*np.cos(alpha_rad-est_heading_rad)
-        robo_y_speed = response_mag*np.sin(alpha_rad-est_heading_rad)
+        robo_x_speed = response_mag*np.cos(alpha_rad+est_heading_rad)
+        robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
         print("des: ({}, {}, {}) est:({:.2f}, {:.2f}, {:.2f})  response:({:.2f}, {:.2f}, {:.2f}) error: {:.2f} {:.2f} {:.2f}".format(path[path_num][0],path[path_num][1],path[path_num][2],est_x, est_y,est_heading,robo_x_speed,robo_y_speed,z_response,np.mean(error_norm),alpha_rad,response_mag))
-        ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,-1*z_response,timeout=.1)
+        ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
         time.sleep(.01)
 
 
