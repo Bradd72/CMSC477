@@ -101,8 +101,8 @@ def pickup_block(color_range):
                         greatest_y = centroid[i][1]
                         best_range = color_range
                         (cX, cY) = centroid[i]
-                    cv2.rectangle(img=output, pt1=(round(cX-w/2),round(cY-h/2)),
-                                        pt2=(round(cX+w/2),round(cY+h/2)),
+                    cv2.rectangle(img=output, pt1=(round(centroid[i][0]-w/2),round(centroid[i][1]-h/2)),
+                                        pt2=(round(centroid[i][0]+w/2),round(centroid[i][1]+h/2)),
                                         color=(0,255,255), thickness=2)
         cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
         # print("{}, {}".format(cX,cY))
@@ -124,7 +124,43 @@ def pickup_block(color_range):
 
 
 def block_handoff():
-    
+    global cX,cY
+    # blue_range = (np.array([108,61,111]),np.array([123,255,255]),"blue")
+    blue_range = (np.array([100,140,40]),np.array([135,255,255]),"blue")
+    run_bool = True
+    while(run_bool):
+        frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)   
+        frame_height, frame_width, c = frame.shape
+        blurred = cv2.medianBlur(frame,9)
+        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, blue_range[0], blue_range[1])
+        output = blurred.copy() 
+        analysis = cv2.connectedComponentsWithStats(mask,4,cv2.CV_32S)
+        (totalLabels, label_ids, values, centroid) = analysis  
+        for i in range(1, totalLabels):
+            w = values[i, cv2.CC_STAT_WIDTH]
+            h = values[i, cv2.CC_STAT_HEIGHT]
+            area = values[i, cv2.CC_STAT_AREA] 
+            # print("a:{:.2f}  w:{:.2f}  h:{:.2f}".format(area,w,h))
+            if (area > 2000) and (area < 10000) and (5<w/h):
+                (cX, cY) = centroid[i]
+                cv2.circle(output, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+        
+        if centroid_pid(210,250):
+            ep_chassis.drive_speed(.25,0,0,timeout=2.75);time.sleep(2.75)
+            ep_chassis.drive_speed(0,0,0);time.sleep(.1)
+            ep_gripper.open();time.sleep(2);ep_gripper.stop()
+            ep_arm.move(0,50).wait_for_completed()
+            break
+        
+        print("({:.2f},{:.2f})".format(cX,cY))
+        ep_chassis.drive_speed(x_response*-1, y_response*1,0,timeout=.5)
+        res = cv2.bitwise_and(frame,frame, mask= mask)
+        cv2.imshow("res",res)       
+        cv2.imshow("out",output)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        
 
 
 
@@ -135,8 +171,9 @@ if __name__ == '__main__':
     ep_camera = ep_robot.camera
     ep_gripper = ep_robot.gripper
     ep_arm = ep_robot.robotic_arm
-    ep_gripper.open()
-    ep_arm.moveto(180,-80).wait_for_completed()
+    ep_gripper.open();time.sleep(.5);ep_gripper.stop()
+    ep_arm.moveto(180,-80+140).wait_for_completed()
+    ep_gripper.close();time.sleep(.5);ep_gripper.stop()
     ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
 
     block_handoff()

@@ -18,7 +18,7 @@ def meter_to_scale(meters_value):
 if __name__ == "__main__":
     maze_width_meters = 16/3.281    # ft to m
     maze_height_meters = 14/3.281   # ft to m
-    leftEdge_BlockZone_from_leftEdgeMaze_meters = 3.4
+    leftEdge_BlockZone_from_leftEdgeMaze_meters = 12/3.281
     width_BlockZone_meters = 0.52
     height_BlockZone_meters = 1.055
 
@@ -38,5 +38,6 @@ if __name__ == "__main__":
             maze[j,i] = WALL_VALUE
 
     # open by creating new file and append to it
-    with open('Labs/Final_Lab/Final_Lab_maze2.csv','w') as f:
+    # with open('Labs/Final_Lab/Final_Lab_maze2.csv','w') as f:
+    with open('Final_Lab/Final_Lab_maze2.csv','w') as f:
         np.savetxt(f, maze, delimiter=",", fmt="%d")

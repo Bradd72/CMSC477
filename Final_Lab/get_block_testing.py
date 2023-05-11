@@ -48,7 +48,7 @@ def find_closet_block():
     blue_range = (np.array([90,50,76]),np.array([135,255,255]),"blue")
     item_found = False
     greatest_y=0;best_range=org_range
-    for color_range in [org_range,green_range,red_range,blue_range,yel_range]:
+    for color_range in [org_range,green_range,red_range,yel_range]:
         for iter_num in range(20):
             frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
             blurred = cv2.medianBlur(frame,9)
