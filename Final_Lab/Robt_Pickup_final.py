@@ -44,27 +44,32 @@ if TEAM=="top":
 elif TEAM=="bot":
     INITIAL_LOC = (15/3.281,12/3.281)
     BLOCK_PICKUP_LOC = (15/3.281,8/3.281)
-    BLOCK_PLACE_LOC = (9/3.281,7.5/3.281)
-    TEMP_LOC = (15/3.281,10.0/3.281)
+    TEMP_PICKUP_LOC = (15/3.281,9.0/3.281)
+    BLOCK_PLACE_LOC = (8.5/3.281,7.5/3.281)
+    TEMP_PLACE_LOC = (10.5/3.281,7.5/3.281)
+    
+    
 # Centroid PID Globals
 K_p_pix=.0005; K_i_pix=.000002; K_d_pix=0; cX=0; cY=0
 error_norm_pix=np.ones((20,1))*100;error_tol_pix=15
 y_pix_diff=0;x_pix_diff=0;y_pix_integrator=0;x_pix_integrator=0;y_pix_error=0;x_pix_error=0;y_response=0;x_response=0;error_count_pix=0;prev_time=time.time()
 # Map PID Globals
-K_p = .35;K_i = .25;K_d=0.2
+K_p = .4;K_i = .25;K_d=0.2
 K_p_z = 1.5;K_i_z = 0;K_d_z = 0
 # K_p_z = .5;K_i_z = .05;K_d_z = .001
 initial_x=INITIAL_LOC[0];initial_y=INITIAL_LOC[1];initial_head=0
+yaw_adjustment=0
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
 y_error=0;y_diff=0;y_integrator=0;y_response=0;est_y=0
 head_error=0;head_diff=0;head_integrator=0;z_response=0
 error_norm=np.ones((25,1))*25;error_count=0;error_tol=.15
 prev_time=time.time()
 est_heading=initial_head;est_heading_rad=np.deg2rad(est_heading);est_x=initial_x;est_y=initial_y
+tangent_angle_rad=initial_head
 
 def sub_attitude_info_handler(attitude_info):
     global est_heading_rad,initial_head,est_heading
-    yaw = -attitude_info[0]
+    yaw = -attitude_info[0] - yaw_adjustment
     est_heading=yaw+initial_head;est_heading_rad=np.deg2rad(est_heading)
 
 def sendTextViaSocket(message, sock):
@@ -144,34 +149,36 @@ def find_closet_block():
     blue_range = (np.array([100,140,40]),np.array([135,255,255]),"blue")
     item_found = False
     greatest_y=0;best_range=org_range
-    for color_range in [org_range,green_range,red_range,yel_range]:
-        for iter_num in range(20):
-            frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
-            blurred = cv2.medianBlur(frame,9)
-            output = blurred.copy() 
-            hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv, color_range[0], color_range[1])
-            (totalLabels, label_ids, values, centroid) = cv2.connectedComponentsWithStats(mask,4,cv2.CV_32S)
-            for i in range(1, totalLabels):
-                    w = values[i, cv2.CC_STAT_WIDTH]
-                    h = values[i, cv2.CC_STAT_HEIGHT]
-                    area = values[i, cv2.CC_STAT_AREA] 
-                    # print("area: {}  w:{} h:{}".format(area,w,h))
-                    # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
-                    if (area > 750) and (area < 10000):
-                        item_found = True
-                        componentMask = (label_ids == i).astype("uint8") * 255
-                        if centroid[i][1] > greatest_y:
-                            print("y:{:.2f} c:{}".format(greatest_y,color_range[2]))
-                            greatest_y = centroid[i][1]
-                            best_range = color_range
-                        cv2.circle(output, (int(centroid[i][0]), int(centroid[i][1])), 4, (0, 0, 255), -1)
+    while not item_found:
+        for color_range in [org_range,green_range,red_range,yel_range]:
+            for iter_num in range(5):
+                frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+                blurred = cv2.medianBlur(frame,9)
+                output = blurred.copy() 
+                hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+                mask = cv2.inRange(hsv, color_range[0], color_range[1])
+                (totalLabels, label_ids, values, centroid) = cv2.connectedComponentsWithStats(mask,4,cv2.CV_32S)
+                for i in range(1, totalLabels):
+                        w = values[i, cv2.CC_STAT_WIDTH]
+                        h = values[i, cv2.CC_STAT_HEIGHT]
+                        area = values[i, cv2.CC_STAT_AREA] 
+                        # print("area: {}  w:{} h:{}".format(area,w,h))
+                        # Checks if Item is big enough and if looking for orange will make sure it is wider than tall
+                        if (area > 750) and (area < 10000):
+                            componentMask = (label_ids == i).astype("uint8") * 255
+                            if centroid[i][1] > greatest_y:
+                                item_found = True
+                                print("y:{:.2f} c:{}".format(greatest_y,color_range[2]))
+                                greatest_y = centroid[i][1]
+                                best_range = color_range
+                            cv2.circle(output, (int(centroid[i][0]), int(centroid[i][1])), 4, (0, 0, 255), -1)
             
     # print(best_range,greatest_y)
     if item_found:
         print("Going for {} block".format(best_range[2]))
         return best_range
     else:
+        print("no block found")
         return False
 
 def pickup_block(color_range):
@@ -251,6 +258,27 @@ def centroid_pid(des_cX,des_cY):
     else:
         return False
 
+def updateMapLoc(plot_bool=True,update_bool=True):
+    if plot_bool:
+        lst= [0,90,180,-180,-90]
+        rounded_heading = lst[min(range(len(lst)), key = lambda i: abs(lst[i]-est_heading))]
+        if rounded_heading==0:
+            plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m>') 
+        elif rounded_heading==90:
+            plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m^') 
+        elif rounded_heading==-90:
+            plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'mv') 
+        elif abs(rounded_heading)==180:
+            plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m<') 
+    if (update_bool):
+        plt.pause(1e-10)
+
+def responseToSpeed():
+    alpha_rad = np.arctan2(y_response,x_response)
+    response_mag = np.linalg.norm((x_response,y_response))
+    robo_x_speed = response_mag*np.cos(alpha_rad+est_heading_rad)
+    robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
+    return robo_x_speed,robo_y_speed
 
 if __name__ == '__main__':
     # # Open Socket Communication Server
@@ -273,16 +301,16 @@ if __name__ == '__main__':
     mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     height, width = mazeList.shape
     mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 2
-    mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
+    mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
 
     start = np.where(mazeList==2)
     startLoc = np.array([start[1][0],start[0][0]])
     oldxloc = [startLoc[0],startLoc[1],0]
     # Start interactive plot
     plt.ion()
-    fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=(5, 5))
     ax = fig.add_subplot(111)
-    Dijkstra.ExpandWalls(mazeList,padding=4)
+    Dijkstra.ExpandWalls(mazeList,padding=5,pad_center=False)
     Dijkstra.Draw_Maze(mazeList,ax)
     # Solve Path
     shortestPath = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
@@ -314,32 +342,49 @@ if __name__ == '__main__':
     #x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
     #x.start()
     
-    run_bool=True
+    run_bool=False
     framecount = 1
     path_count=0
     target = "pickup"
-    while(run_bool): 
+    yaw_adjustment=est_heading-initial_head
+    #testing Zone
+    while(not run_bool):
+        # print("{}   {}".format(est_heading,yaw_adjustment))
+        updateMapLoc()
+        print("({:.2f},{:.2f},{:.2f})  maze:({:.2f}, {:.2f})".format(est_x,est_y,est_heading,est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP))
+        # ep_gripper.open();time.sleep(2);ep_gripper.stop()
+        # ep_arm.moveto(180,-80).wait_for_completed()
+        # color_range = find_closet_block()
+        # pickup_block(color_range)
+        time.sleep(.01)
 
+    while(run_bool): 
+        updateMapLoc(framecount%25 == 0,framecount%50 == 0)
         # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
         if (path_count+2)>len(pathDes):
+            updateMapLoc()
             if target =="pickup":
                 while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179)):
-                    ep_chassis.drive_speed(0,0,1*z_response,timeout=.1)
+                    robo_x_speed, robo_y_speed = responseToSpeed()
+                    ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
                 ep_chassis.drive_speed(0,0,0,timeout=.1)
                 color_range = find_closet_block()
+                
                 pickup_block(color_range)
-                while(not odom_pid(TEMP_LOC[0],TEMP_LOC[1],179)):
-                    alpha_rad = np.arctan2(y_response,x_response)
-                    response_mag = np.linalg.norm((x_response,y_response))
-                    robo_x_speed = response_mag*np.cos(alpha_rad+est_heading_rad)
-                    robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
+                # break
+                while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179)):
+                    robo_x_speed, robo_y_speed = responseToSpeed()
+                    ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
+                    time.sleep(.01)
+                while(not odom_pid(TEMP_PICKUP_LOC[0],TEMP_PICKUP_LOC[1],179)):
+                    robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
                 mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 0
                 mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 0
-                mazeList[int(TEMP_LOC[1]*METERS_TO_MAP),int(TEMP_LOC[0]*METERS_TO_MAP)] = 2
-                mazeList[int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
+                mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 2
+                mazeList[int(TEMP_PLACE_LOC[1]*METERS_TO_MAP),int(TEMP_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
                 start = np.where(mazeList==2)
                 startLoc = np.array([start[1][0],start[0][0]])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
@@ -347,38 +392,46 @@ if __name__ == '__main__':
                 target = "place"
                 # break
             elif target =="place":
-                while(not odom_pid(BLOCK_PLACE_LOC[0],BLOCK_PLACE_LOC[1],170)):
-                    alpha_rad = np.arctan2(y_response,x_response)
-                    response_mag = np.linalg.norm((x_response,y_response))
-                    robo_x_speed = response_mag*np.cos(alpha_rad+est_heading_rad)
-                    robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
+                while(not odom_pid(BLOCK_PLACE_LOC[0],BLOCK_PLACE_LOC[1],179)):
+                    robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
-                print("waiting")
-                ep_arm.move(0,-80).wait_for_completed()
-                ep_gripper.open();time.sleep(2);ep_gripper.stop()
-                ep_arm.move(0,80).wait_for_completed()
-                # block_handoff()
-                # river_align()
-                break
+                # ep_arm.moveto(180,-50)
+                ep_gripper.open();time.sleep(1);ep_gripper.stop()
+                # ep_arm.moveto(180,140).wait_for_completed()
+                print("dropped")
+                while(not odom_pid(TEMP_PLACE_LOC[0],TEMP_PLACE_LOC[1],0)):
+                    robo_x_speed, robo_y_speed = responseToSpeed()
+                    ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
+                    time.sleep(.01)
+                ep_arm.moveto(180,-80)
+                mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 3
+                mazeList[int(TEMP_PLACE_LOC[1]*METERS_TO_MAP),int(TEMP_PLACE_LOC[0]*METERS_TO_MAP)] = 2
+                start = np.where(mazeList==2)
+                startLoc = np.array([start[1][0],start[0][0]])
+                pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+                path_count=0
+                target="pickup"
+                # break
         # Get desired Heading along path
         # tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-est_x,pathDes[path_count+1][1]/METERS_TO_MAP-est_y]
         tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-pathDes[path_count+0][0]/METERS_TO_MAP,pathDes[path_count+1][1]/METERS_TO_MAP-pathDes[path_count+0][1]/METERS_TO_MAP]
+        old_tangent_angle_rad = tangent_angle_rad
         tangent_angle_rad = (-np.arctan2(tangent_vector[1],tangent_vector[0]))
         # print(np.rad2deg(tangent_angle_rad))
-        #tangent_angle_rad=0
-        if odom_pid(pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP,np.rad2deg(tangent_angle_rad)):
+        rounded_tangent = np.rad2deg(tangent_angle_rad+(tangent_angle_rad-old_tangent_angle_rad)/2)
+        if abs(rounded_tangent)>180:
+            continue
+        if odom_pid(pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP,rounded_tangent):
             path_count+=2
 
-        alpha_rad = np.arctan2(y_response,x_response)
-        response_mag = np.linalg.norm((x_response,y_response))
-        robo_x_speed = response_mag*np.cos(alpha_rad+est_heading_rad)
-        robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
+        robo_x_speed, robo_y_speed = responseToSpeed()
         ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
         # Other stuff
-        plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m.') # plot current position
-        if (framecount%50 == 0):
-            plt.pause(1e-10)
+        
+        # plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m.') # plot current position
+        # if (framecount%50 == 0):
+        #     plt.pause(1e-10)
         #print("d:%5.2f | y: %5.2f" % (ir_distance_m, yaw))
         # if (ir_distance_m <= 3):
         #     #objectLoc = [x_new[0]+np.cos(est_heading_rad)*ir_distance_m,x_new[0]+np.sin(est_heading_rad)*ir_distance_m]
@@ -408,8 +461,9 @@ if __name__ == '__main__':
                 pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
                 path_count=0
                 Dijkstra.PlotPath(pathDes)
+                updateMapLoc()
                 # plt.show()
-        if cv2.waitKey(10) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
         time.sleep(.01)
