@@ -137,7 +137,7 @@ def SetObstacles(maze,Loc,padding=1):
 
         for i in range(2*padding+1):
             for j in range(2*padding+1):
-                if (Loc[1]-i+padding > 0 and Loc[0]-j+padding > 0 and Loc[0]-j+padding < height and Loc[1]-i+padding < width):
+                if (Loc[1]-i+padding > 1 and Loc[0]-j+padding > 1 and Loc[0]-j+padding < height-1 and Loc[1]-i+padding < width-1):
                     if maze[Loc[1]-i+padding,Loc[0]-j+padding] == 0:
                         maze[Loc[1]-i+padding,Loc[0]-j+padding] = 10
 
