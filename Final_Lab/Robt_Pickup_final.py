@@ -46,7 +46,7 @@ elif TEAM=="bot":
     BLOCK_PICKUP_LOC = (15/3.281,8/3.281)
     TEMP_PICKUP_LOC = (15/3.281,9.0/3.281)
     BLOCK_PLACE_LOC = (8.5/3.281,7.5/3.281)
-    TEMP_PLACE_LOC = (10.5/3.281,7.5/3.281)
+    TEMP_PLACE_LOC = (10.4/3.281,7.5/3.281)
     
     
 # Centroid PID Globals
@@ -96,7 +96,7 @@ def sub_position_handler(position_info):
     est_x = robo_x + initial_x
     est_y = robo_y + initial_y
 
-def odom_pid(des_X,des_Y,des_head):
+def odom_pid(des_X,des_Y,des_head,tight=False):
     
     global y_diff,x_diff,head_diff,y_integrator,x_integrator,head_integrator,y_error,x_error,head_error,y_response,x_response,z_response,error_count,error_norm,prev_time
     y_prev=y_error
@@ -123,6 +123,10 @@ def odom_pid(des_X,des_Y,des_head):
         y_integrator = 0; y_diff = 0; x_integrator = 0; x_diff = 0; head_integrator=0; head_diff=0
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
+    if x_error>.5:
+        x_response = x_error*K_p
+    if y_error>.5:
+        y_response = y_error*K_p
     # z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
     if abs(head_error)<20:
         z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
@@ -134,11 +138,19 @@ def odom_pid(des_X,des_Y,des_head):
         error_count+=1
     print("({:.2f},{:.2f},{:.2f})  ({:.2f},{:.2f},{:.2f})  maze:({:.2f}, {:.2f})".format(est_x,est_y,est_heading,des_X,des_Y,des_head,est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP))
     error_norm[error_count]=np.linalg.norm((x_error,y_error,head_error*.125))
-    if np.mean(error_norm)<error_tol: #
-        error_norm=np.ones((25,1))*25
-        return True
+    if tight:
+        if np.mean(error_norm)<error_tol*.25: #
+            error_norm=np.ones((25,1))*25
+            return True
+        else:
+            return False
     else:
-        return False
+        if np.mean(error_norm)<error_tol: #
+            error_norm=np.ones((25,1))*25
+            return True
+        else:
+            return False
+
 
 def find_closet_block():
     yel_range = (np.array([20,120,100]),np.array([50,255,255]),"yellow")
@@ -251,7 +263,7 @@ def centroid_pid(des_cX,des_cY):
     else:
         error_count_pix+=1
     error_norm_pix[error_count_pix]=np.linalg.norm((x_pix_error,y_pix_error))
-    # print("{:.2f},{:.2f}  err:{:.2f}".format(x_response,y_response,np.mean(error_norm_pix)))
+    print("{:.2f},{:.2f}  err:{:.2f}".format(x_response,y_response,np.mean(error_norm_pix)))
     if np.mean(error_norm_pix)<error_tol_pix: #
         error_norm_pix=np.ones((20,1))*100;y_pix_integrator = 0;y_pix_diff = 0;x_integrator = 0;x_diff = 0
         return True
@@ -313,15 +325,12 @@ if __name__ == '__main__':
     Dijkstra.ExpandWalls(mazeList,padding=5,pad_center=False)
     Dijkstra.Draw_Maze(mazeList,ax)
     # Solve Path
-    shortestPath = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
-    Dijkstra.PlotPath(shortestPath)
+    pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+    Dijkstra.PlotPath(pathDes)
+    plt.plot(TEMP_PLACE_LOC[0]*METERS_TO_MAP,-TEMP_PLACE_LOC[1]*METERS_TO_MAP,"bx")
+    plt.plot(BLOCK_PLACE_LOC[0]*METERS_TO_MAP,-BLOCK_PLACE_LOC[1]*METERS_TO_MAP,"bx")
     plt.pause(1)
-
-    pathDes = shortestPath
     # print(pathDes)
-    # exit()
-    x_old = np.zeros((3,))
-    x_new = np.zeros((3,))
     
     # Initialize Robot
     ep_robot = robot.Robot()
@@ -342,12 +351,12 @@ if __name__ == '__main__':
     #x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
     #x.start()
     
-    run_bool=False
+    run_bool=True
     framecount = 1
     path_count=0
     target = "pickup"
     yaw_adjustment=est_heading-initial_head
-    #testing Zone
+    #Map testing Zone
     while(not run_bool):
         # print("{}   {}".format(est_heading,yaw_adjustment))
         updateMapLoc()
@@ -363,6 +372,11 @@ if __name__ == '__main__':
         # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
         if (path_count+2)>len(pathDes):
             updateMapLoc()
+            while(not odom_pid(pathDes[-1][0]/METERS_TO_MAP,pathDes[-1][1]/METERS_TO_MAP,179,tight=True)):
+                robo_x_speed, robo_y_speed = responseToSpeed()
+                ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
+                time.sleep(.01)
+            updateMapLoc()
             if target =="pickup":
                 while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
@@ -377,7 +391,7 @@ if __name__ == '__main__':
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
-                while(not odom_pid(TEMP_PICKUP_LOC[0],TEMP_PICKUP_LOC[1],179)):
+                while(not odom_pid(TEMP_PICKUP_LOC[0],TEMP_PICKUP_LOC[1],179,tight=True)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
@@ -392,10 +406,12 @@ if __name__ == '__main__':
                 target = "place"
                 # break
             elif target =="place":
+                updateMapLoc()
                 while(not odom_pid(BLOCK_PLACE_LOC[0],BLOCK_PLACE_LOC[1],179)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
+                updateMapLoc()
                 # ep_arm.moveto(180,-50)
                 ep_gripper.open();time.sleep(1);ep_gripper.stop()
                 # ep_arm.moveto(180,140).wait_for_completed()
