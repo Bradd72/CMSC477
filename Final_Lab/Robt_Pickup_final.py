@@ -43,9 +43,9 @@ if TEAM=="top":
     
 elif TEAM=="bot":
     INITIAL_LOC = (15/3.281,12/3.281)
-    BLOCK_PICKUP_LOC = (15/3.281,8/3.281)
+    BLOCK_PICKUP_LOC = (15.25/3.281,8/3.281)
     TEMP_PICKUP_LOC = (15/3.281,9.0/3.281)
-    BLOCK_PLACE_LOC = (8.5/3.281,7.5/3.281)
+    BLOCK_PLACE_LOC = (8.75/3.281,7.5/3.281)
     TEMP_PLACE_LOC = (10.4/3.281,7.5/3.281)
     
     
@@ -54,7 +54,7 @@ K_p_pix=.0005; K_i_pix=.000002; K_d_pix=0; cX=0; cY=0
 error_norm_pix=np.ones((20,1))*100;error_tol_pix=15
 y_pix_diff=0;x_pix_diff=0;y_pix_integrator=0;x_pix_integrator=0;y_pix_error=0;x_pix_error=0;y_response=0;x_response=0;error_count_pix=0;prev_time=time.time()
 # Map PID Globals
-K_p = .4;K_i = .25;K_d=0.2
+K_p = 1.2;K_i = .25;K_d=0.2
 K_p_z = 1.5;K_i_z = 0;K_d_z = 0
 # K_p_z = .5;K_i_z = .05;K_d_z = .001
 initial_x=INITIAL_LOC[0];initial_y=INITIAL_LOC[1];initial_head=0
@@ -110,7 +110,7 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
     time_ = time.time()
     time_step = time_ - prev_time
     prev_time = time_
-    if 0<time_step and time_step < .5:
+    if 0<time_step and time_step < .5 and tight:
         y_integrator +=y_error*time_step   
         y_diff = (y_error - y_prev) / time_step
         x_integrator +=x_error*time_step  
@@ -119,7 +119,7 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
         head_diff = (head_error - head_prev) / time_step
         
     else:
-        print("long wait: {}".format(time_step))
+        # print("long wait: {}".format(time_step))
         y_integrator = 0; y_diff = 0; x_integrator = 0; x_diff = 0; head_integrator=0; head_diff=0
     y_response = y_error*K_p+y_integrator*K_i+y_diff*K_d
     x_response = x_error*K_p+x_integrator*K_i+x_diff*K_d
@@ -131,7 +131,7 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
     if abs(head_error)<20:
         z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
     else:
-        z_response = (head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z)*.1
+        z_response = (head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z)*.5
     if error_count>=len(error_norm)-1:
         error_count=0
     else:
@@ -150,7 +150,6 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
             return True
         else:
             return False
-
 
 def find_closet_block():
     yel_range = (np.array([20,120,100]),np.array([50,255,255]),"yellow")
@@ -228,7 +227,10 @@ def pickup_block(color_range):
             ep_chassis.drive_speed(.125,0,0,timeout=.25);time.sleep(.25)
             ep_chassis.drive_speed(0,0,0);time.sleep(.1)
             ep_gripper.close();time.sleep(2);ep_gripper.stop()
-            ep_arm.move(0,140).wait_for_completed()
+            # ep_arm.move(0,140).wait_for_completed()
+            # ep_arm.moveto(180,60).wait_for_completed()
+            # ep_arm._in_progress = {}
+            act=ep_arm.moveto(180,60);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
             break
 
         ep_chassis.drive_speed(x_response*-1, y_response*1,0,timeout=.5)
@@ -313,7 +315,8 @@ if __name__ == '__main__':
     mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     height, width = mazeList.shape
     mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 2
-    mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
+    # mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
+    mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
 
     start = np.where(mazeList==2)
     startLoc = np.array([start[1][0],start[0][0]])
@@ -329,6 +332,7 @@ if __name__ == '__main__':
     Dijkstra.PlotPath(pathDes)
     plt.plot(TEMP_PLACE_LOC[0]*METERS_TO_MAP,-TEMP_PLACE_LOC[1]*METERS_TO_MAP,"bx")
     plt.plot(BLOCK_PLACE_LOC[0]*METERS_TO_MAP,-BLOCK_PLACE_LOC[1]*METERS_TO_MAP,"bx")
+    plt.plot(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP,-BLOCK_PICKUP_LOC[1]*METERS_TO_MAP,"rx")
     plt.pause(1)
     # print(pathDes)
     
@@ -372,13 +376,13 @@ if __name__ == '__main__':
         # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
         if (path_count+2)>len(pathDes):
             updateMapLoc()
-            while(not odom_pid(pathDes[-1][0]/METERS_TO_MAP,pathDes[-1][1]/METERS_TO_MAP,179,tight=True)):
+            while(not odom_pid(pathDes[-1][0]/METERS_TO_MAP,pathDes[-1][1]/METERS_TO_MAP,np.rad2deg(tangent_angle_rad),tight=True)):
                 robo_x_speed, robo_y_speed = responseToSpeed()
                 ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                 time.sleep(.01)
             updateMapLoc()
             if target =="pickup":
-                while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179)):
+                while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179,tight=True)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
@@ -396,36 +400,46 @@ if __name__ == '__main__':
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
                 mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 0
-                mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 0
-                mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 2
+                mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 2
+                # mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 2
                 mazeList[int(TEMP_PLACE_LOC[1]*METERS_TO_MAP),int(TEMP_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
                 start = np.where(mazeList==2)
                 startLoc = np.array([start[1][0],start[0][0]])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+                Dijkstra.PlotPath(pathDes)
                 path_count=0
                 target = "place"
                 # break
             elif target =="place":
+                updateMapLoc()
+                while(not odom_pid(TEMP_PLACE_LOC[0],TEMP_PLACE_LOC[1],179)):
+                    robo_x_speed, robo_y_speed = responseToSpeed()
+                    ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
+                    time.sleep(.01)
                 updateMapLoc()
                 while(not odom_pid(BLOCK_PLACE_LOC[0],BLOCK_PLACE_LOC[1],179)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
                 updateMapLoc()
-                # ep_arm.moveto(180,-50)
+                # ep_arm.moveto(220,15).wait_for_completed()
+                act=ep_arm.moveto(220,15);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
                 ep_gripper.open();time.sleep(1);ep_gripper.stop()
-                # ep_arm.moveto(180,140).wait_for_completed()
                 print("dropped")
                 while(not odom_pid(TEMP_PLACE_LOC[0],TEMP_PLACE_LOC[1],0)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
-                ep_arm.moveto(180,-80)
-                mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 3
+                # ep_arm.moveto(180,-80).wait_for_completed()
+                # ep_arm._in_progress = {}
+                act=ep_arm.moveto(180,-80);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
+                # mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 3
+                mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
                 mazeList[int(TEMP_PLACE_LOC[1]*METERS_TO_MAP),int(TEMP_PLACE_LOC[0]*METERS_TO_MAP)] = 2
                 start = np.where(mazeList==2)
                 startLoc = np.array([start[1][0],start[0][0]])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+                Dijkstra.PlotPath(pathDes)
                 path_count=0
                 target="pickup"
                 # break
@@ -445,7 +459,6 @@ if __name__ == '__main__':
         ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
         # Other stuff
         
-        # plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m.') # plot current position
         # if (framecount%50 == 0):
         #     plt.pause(1e-10)
         #print("d:%5.2f | y: %5.2f" % (ir_distance_m, yaw))
@@ -462,23 +475,24 @@ if __name__ == '__main__':
         #     Dijkstra.RemoveObstacles(mazeList)
         #     Dijkstra.Draw_Maze(mazeList,ax)
         #     framecount = 0
-        if (framecount%5000 == 0):
-            if (path_count+20)<len(pathDes): # checks to not make a new path if the previous on is short enough
+        # if (framecount%5000 == 0):
+        #     if (path_count+20)<len(pathDes): # checks to not make a new path if the previous on is short enough
                 
-                plt.cla()
-                print("Clear")
-                Dijkstra.Draw_Maze(mazeList,ax)
-                # Solve Path
-                # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
-                #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
-                # else:
-                #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
-                # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
-                pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
-                path_count=0
-                Dijkstra.PlotPath(pathDes)
-                updateMapLoc()
-                # plt.show()
+        #         plt.cla()
+        #         print("Clear")
+        #         Dijkstra.Draw_Maze(mazeList,ax)
+        #         # Solve Path
+        #         # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
+        #         #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
+        #         # else:
+        #         #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
+        #         # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
+                
+        #         pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
+        #         path_count=0
+        #         Dijkstra.PlotPath(pathDes)
+        #         updateMapLoc()
+        #         # plt.show()
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
