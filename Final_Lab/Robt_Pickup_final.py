@@ -34,19 +34,22 @@ ACK_TEXT = 'text_received'
 
 # Map Gobals
 METERS_TO_MAP = 15
-# TEAM = "top"
-TEAM = "bot"
+TEAM = "top"
+# TEAM = "bot"
 if TEAM=="top":
     INITIAL_LOC = (15/3.281,2/3.281)
-    BLOCK_PICKUP_LOC = (15/3.281,6.0/3.281)
-    BLOCK_PLACE_LOC = (8/3.281,6.5/3.281)
-    
+    BLOCK_PICKUP_LOC = (15.25/3.281,6.0/3.281)
+    TEMP_PICKUP_LOC = (15/3.281,5.0/3.281)
+    BLOCK_PLACE_LOC = (8.75/3.281,6.5/3.281)
+    TEMP_PLACE_LOC = (10.4/3.281,6.55/3.281)
+    BLOCKER_LOC = (15/3.281,9/3.281)
 elif TEAM=="bot":
     INITIAL_LOC = (15/3.281,12/3.281)
     BLOCK_PICKUP_LOC = (15.25/3.281,8/3.281)
     TEMP_PICKUP_LOC = (15/3.281,9.0/3.281)
     BLOCK_PLACE_LOC = (8.75/3.281,7.5/3.281)
     TEMP_PLACE_LOC = (10.4/3.281,7.5/3.281)
+    BLOCKER_LOC = (15/3.281,5/3.281)
     
     
 # Centroid PID Globals
@@ -326,10 +329,12 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(5, 5))
     ax = fig.add_subplot(111)
     Dijkstra.ExpandWalls(mazeList,padding=5,pad_center=False)
+    Dijkstra.SetObstacles(mazeList,[int(BLOCKER_LOC[0]*METERS_TO_MAP),int(BLOCKER_LOC[1]*METERS_TO_MAP)],padding=5)
     Dijkstra.Draw_Maze(mazeList,ax)
     # Solve Path
     pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
     Dijkstra.PlotPath(pathDes)
+    
     plt.plot(TEMP_PLACE_LOC[0]*METERS_TO_MAP,-TEMP_PLACE_LOC[1]*METERS_TO_MAP,"bx")
     plt.plot(BLOCK_PLACE_LOC[0]*METERS_TO_MAP,-BLOCK_PLACE_LOC[1]*METERS_TO_MAP,"bx")
     plt.plot(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP,-BLOCK_PICKUP_LOC[1]*METERS_TO_MAP,"rx")
@@ -458,9 +463,6 @@ if __name__ == '__main__':
         robo_x_speed, robo_y_speed = responseToSpeed()
         ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
         # Other stuff
-        
-        # if (framecount%50 == 0):
-        #     plt.pause(1e-10)
         #print("d:%5.2f | y: %5.2f" % (ir_distance_m, yaw))
         # if (ir_distance_m <= 3):
         #     #objectLoc = [x_new[0]+np.cos(est_heading_rad)*ir_distance_m,x_new[0]+np.sin(est_heading_rad)*ir_distance_m]
@@ -475,24 +477,24 @@ if __name__ == '__main__':
         #     Dijkstra.RemoveObstacles(mazeList)
         #     Dijkstra.Draw_Maze(mazeList,ax)
         #     framecount = 0
-        # if (framecount%5000 == 0):
-        #     if (path_count+20)<len(pathDes): # checks to not make a new path if the previous on is short enough
+        if (framecount%500 == 0):
+            if (path_count+10)<len(pathDes): # checks to not make a new path if the previous on is short enough
                 
-        #         plt.cla()
-        #         print("Clear")
-        #         Dijkstra.Draw_Maze(mazeList,ax)
-        #         # Solve Path
-        #         # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
-        #         #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
-        #         # else:
-        #         #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
-        #         # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
+                plt.cla()
+                print("Clear")
+                Dijkstra.Draw_Maze(mazeList,ax)
+                # Solve Path
+                # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
+                #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
+                # else:
+                #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
+                # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
                 
-        #         pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
-        #         path_count=0
-        #         Dijkstra.PlotPath(pathDes)
-        #         updateMapLoc()
-        #         # plt.show()
+                pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
+                path_count=0
+                Dijkstra.PlotPath(pathDes)
+                updateMapLoc()
+                # plt.show()
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 

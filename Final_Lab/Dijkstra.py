@@ -129,7 +129,7 @@ def SetObstacles(maze,Loc,padding=1):
     Creates a 1 unit wide boundary around all known walls
     '''
     height, width = maze.shape
-    if Loc[0] < 0 or Loc[0] > width or Loc[1] < 0 or Loc[1] > height:
+    if Loc[0] < 0 or Loc[0] >= width or Loc[1] < 0 or Loc[1] >= height:
         return
     if maze[Loc[1],Loc[0]] == 0 or maze[Loc[1],Loc[0]] == 10: # Wall
         plt.plot(Loc[0],-Loc[1],c='r',marker='x')
