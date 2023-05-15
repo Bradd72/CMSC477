@@ -275,7 +275,7 @@ def centroid_pid(des_cX,des_cY):
     else:
         return False
 
-def updateMapLoc(plot_bool=True,update_bool=True):
+def updateMapLoc(plot_bool=True,update_bool=True,update_path=False,clear_bool=False):
     if plot_bool:
         lst= [0,90,180,-180,-90]
         rounded_heading = lst[min(range(len(lst)), key = lambda i: abs(lst[i]-est_heading))]
@@ -287,8 +287,24 @@ def updateMapLoc(plot_bool=True,update_bool=True):
             plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'mv') 
         elif abs(rounded_heading)==180:
             plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m<') 
+
+        if (ir_distance_m <= 2):
+            objectLoc = [est_x+np.cos(est_heading_rad)*ir_distance_m,est_y-np.sin(est_heading_rad)*ir_distance_m]
+            if (objectLoc[0] > 0 and objectLoc[1] > 0 and int(METERS_TO_MAP*objectLoc[1]) < height and int(METERS_TO_MAP*objectLoc[0]) < width):
+                Dijkstra.SetObstacles(mazeList,[int(METERS_TO_MAP*objectLoc[0]),int(METERS_TO_MAP*objectLoc[1])],2)
     if (update_bool):
         plt.pause(1e-10)
+    if (update_path):
+        plt.cla()
+        print("Full Clear")
+        Dijkstra.Draw_Maze(mazeList,ax)
+        Dijkstra.PlotPath(pathDes)
+    if (clear_bool):
+        plt.cla()
+        print("Full Clear")
+        Dijkstra.RemoveObstacles(mazeList)
+        Dijkstra.Draw_Maze(mazeList,ax)
+        Dijkstra.PlotPath(pathDes)
 
 def responseToSpeed():
     alpha_rad = np.arctan2(y_response,x_response)
@@ -298,21 +314,6 @@ def responseToSpeed():
     return robo_x_speed,robo_y_speed
 
 if __name__ == '__main__':
-    # # Open Socket Communication Server
-    # print('Initializing Socket...')
-    # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)    # instantiate a socket object
-    # print('Binding To Socket...')
-    # sock.bind((HOST, PORT))                                     # bind the socket
-    # sock.listen()                                               # start the socket listening
-    # print('Listening To Socket...')
-
-    # # accept the socket response from the client, and get the connection object
-    # conn, addr = sock.accept()      # Note: execution waits here until the client calls sock.connect()
-    # print('Socket Connection Accepted, Received Connection Object')
-
-    # message = input("Message to send: ")
-    # print('Sending: ' + message)
-    # sendTextViaSocket(message, conn)
 
     # mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
@@ -377,7 +378,7 @@ if __name__ == '__main__':
         time.sleep(.01)
 
     while(run_bool): 
-        updateMapLoc(framecount%25 == 0,framecount%50 == 0)
+        updateMapLoc(plot_bool=framecount%25 == 0,update_bool=framecount%50 == 0)
         # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
         if (path_count+2)>len(pathDes):
             updateMapLoc()
@@ -411,7 +412,7 @@ if __name__ == '__main__':
                 start = np.where(mazeList==2)
                 startLoc = np.array([start[1][0],start[0][0]])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
-                Dijkstra.PlotPath(pathDes)
+                updateMapLoc(update_path=True)
                 path_count=0
                 target = "place"
                 # break
@@ -444,7 +445,7 @@ if __name__ == '__main__':
                 start = np.where(mazeList==2)
                 startLoc = np.array([start[1][0],start[0][0]])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
-                Dijkstra.PlotPath(pathDes)
+                updateMapLoc(update_path=True)
                 path_count=0
                 target="pickup"
                 # break
@@ -462,27 +463,8 @@ if __name__ == '__main__':
 
         robo_x_speed, robo_y_speed = responseToSpeed()
         ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
-        # Other stuff
-        #print("d:%5.2f | y: %5.2f" % (ir_distance_m, yaw))
-        # if (ir_distance_m <= 3):
-        #     #objectLoc = [x_new[0]+np.cos(est_heading_rad)*ir_distance_m,x_new[0]+np.sin(est_heading_rad)*ir_distance_m]
-        #     objectLoc = [est_x+np.cos(est_heading_rad)*ir_distance_m,est_x+np.sin(est_heading_rad)*ir_distance_m]
-        #     if (objectLoc[0] >= 0 and objectLoc[1] >= 0 and int(15*objectLoc[1]) < height and int(15*objectLoc[0]) < width):
-        #         #plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='r',marker='x')
-        #         #mazeList[int(15*(objectLoc[1])),int(15*(objectLoc[0]))] = 9     # mazeList[y,x]
-        #         Dijkstra.SetObstacles(mazeList,[int(15*objectLoc[0]),int(15*objectLoc[1])],2)
-        # if (framecount%2500 == 0):
-        #     plt.cla()
-        #     print("Full Clear")
-        #     Dijkstra.RemoveObstacles(mazeList)
-        #     Dijkstra.Draw_Maze(mazeList,ax)
-        #     framecount = 0
         if (framecount%500 == 0):
             if (path_count+10)<len(pathDes): # checks to not make a new path if the previous on is short enough
-                
-                plt.cla()
-                print("Clear")
-                Dijkstra.Draw_Maze(mazeList,ax)
                 # Solve Path
                 # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
                 #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
@@ -493,7 +475,7 @@ if __name__ == '__main__':
                 pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
                 path_count=0
                 Dijkstra.PlotPath(pathDes)
-                updateMapLoc()
+                updateMapLoc(update_path=True)
                 # plt.show()
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
