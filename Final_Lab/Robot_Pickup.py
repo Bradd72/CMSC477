@@ -144,7 +144,7 @@ if __name__ == '__main__':
             wait_to_start_moving = False
 
             # Path to follow
-            followPath = True
+            followPath = False
             if (followPath):
                 node1Time = time.time()
                 firstNode = pathDes.pop(0)
@@ -175,7 +175,7 @@ if __name__ == '__main__':
             
             plt.plot(x_new[0]*15,-x_new[1]*15,'m.')
             #print("d:%5.2f | y: %5.2f" % (ir_distance/1000, yaw))
-            objectLoc = [x_new[0]+np.cos(np.deg2rad(yaw))*ir_distance/1000,x_new[0]+np.sin(np.deg2rad(yaw))*ir_distance/1000]
+            objectLoc = [x_new[0]+np.cos(np.deg2rad(yaw))*ir_distance/1000,x_new[1]+np.sin(np.deg2rad(yaw))*ir_distance/1000]
             if (ir_distance/1000 <= 3):
                 if (objectLoc[0] >= 0 and objectLoc[1] >= 0 and int(15*objectLoc[1]) < height and int(15*objectLoc[0]) < width):
                     #plt.plot(int(15*(objectLoc[0])),int(-15*(objectLoc[1])),c='r',marker='x')
