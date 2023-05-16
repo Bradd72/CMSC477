@@ -12,18 +12,8 @@ from robomaster import camera
 import time
 import pandas as pd
 import matplotlib.pyplot as plt
-import random
-from queue import Empty
-# import threading
-
-random.seed('Final Lab',version=2)
-
 import Dijkstra
 
-from roboflow import Roboflow
-#rf = Roboflow(api_key="kKusTXhj0ObVGmi9slHp")
-#project = rf.workspace().project("project2-l7rdy")
-#model = project.version(4).model
 
 # Map Gobals
 METERS_TO_MAP = 15
@@ -52,9 +42,8 @@ K_p_pix=.00075; K_i_pix=.000004; K_d_pix=0; cX=0; cY=0
 error_norm_pix=np.ones((20,1))*100;error_tol_pix=15
 y_pix_diff=0;x_pix_diff=0;y_pix_integrator=0;x_pix_integrator=0;y_pix_error=0;x_pix_error=0;y_response=0;x_response=0;error_count_pix=0;prev_time=time.time()
 # Map PID Globals
-K_p = 1.5;K_i = .25;K_d=0.2
+K_p = 2;K_i = .25;K_d=0.2
 K_p_z = 1.5;K_i_z = 0;K_d_z = 0
-# K_p_z = .5;K_i_z = .05;K_d_z = .001
 initial_x=INITIAL_LOC[0];initial_y=INITIAL_LOC[1];initial_head=0
 yaw_adjustment=0
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
@@ -152,8 +141,8 @@ def find_closet_block():
                 try:
                     frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
                 except:
-                    print("Camera Fail")
-                    iter_num = iter_num-1 if iter_num==4 else iter_num
+                    print("Camera Fail {}".format(iter_num))
+                    iter_num = iter_num-2 if iter_num>=4 else iter_num
                     continue
                 iter_num+=1
                 blurred = cv2.medianBlur(frame,9)
@@ -481,12 +470,6 @@ if __name__ == '__main__':
         if (framecount%500 == 0):
             if (path_count+10)<len(pathDes): # checks to not make a new path if the previous on is short enough
                 # Solve Path
-                # if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze TODO: may be able take out
-                #     pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
-                # else:
-                #     pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
-                # pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0]) #causes buildup of error
-                
                 pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
                 path_count=0
                 Dijkstra.PlotPath(pathDes)

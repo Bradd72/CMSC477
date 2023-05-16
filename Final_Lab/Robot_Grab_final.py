@@ -12,49 +12,31 @@ from robomaster import camera
 import time
 import pandas as pd
 import matplotlib.pyplot as plt
-import random
-# import threading
-
-random.seed('Final Lab',version=2)
-
 import Dijkstra
-
-from roboflow import Roboflow
-#rf = Roboflow(api_key="kKusTXhj0ObVGmi9slHp")
-#project = rf.workspace().project("project2-l7rdy")
-#model = project.version(4).model
-
-import socket
-from socket import gethostbyname
-import select
-HOST = gethostbyname('0.0.0.0')
-#HOST = 'localhost'
-PORT = 65439
-ACK_TEXT = 'text_received'
 
 # Map Gobals
 METERS_TO_MAP = 15
-# TEAM = "top"
-TEAM = "bot"
+TEAM = "top"
+# TEAM = "bot"
 if TEAM=="top":
-    INITIAL_LOC = (3.5/3.281,1.5/3.281)
-    BLOCK_PICKUP_LOC = (6.5/3.281,6.5/3.281)
-    BLOCK_PLACE_LOC = (3/3.281,2.5/3.281)
+    ANGLE_SIGN = 1
+    INITIAL_LOC = (4/3.281,2/3.281)
+    BLOCK_PICKUP_LOC = (6/3.281,6/3.281)
+    BLOCK_PLACE_LOC = (2/3.281,3.5/3.281)
     
 elif TEAM=="bot":
-    INITIAL_LOC = (4/3.281,13/3.281)
-    BLOCK_PICKUP_LOC = (6.5/3.281,7.5/3.281)
-    BLOCK_PLACE_LOC = (3/3.281,12.5/3.281)
-    
+    ANGLE_SIGN = -1
+    INITIAL_LOC = (4/3.281,12/3.281)
+    BLOCK_PICKUP_LOC = (6/3.281,8/3.281)
+    BLOCK_PLACE_LOC = (2/3.281,10.75/3.281)
     
 # Centroid PID Globals
-K_p_pix=.0005; K_i_pix=.000002; K_d_pix=0; cX=0; cY=0
+K_p_pix=.00075; K_i_pix=.000004; K_d_pix=0; cX=0; cY=0
 error_norm_pix=np.ones((20,1))*100;error_tol_pix=15
 y_pix_diff=0;x_pix_diff=0;y_pix_integrator=0;x_pix_integrator=0;y_pix_error=0;x_pix_error=0;y_response=0;x_response=0;error_count_pix=0;prev_time=time.time()
 # Map PID Globals
-K_p = .4; K_i = .25; K_d=0.2
+K_p = 2;K_i = .25;K_d=0.2
 K_p_z = 1.5;K_i_z = 0;K_d_z = 0
-# K_p_z = .5;K_i_z = .05;K_d_z = .001
 initial_x=INITIAL_LOC[0];initial_y=INITIAL_LOC[1];initial_head=0
 yaw_adjustment=0
 x_error=0;x_diff=0;x_integrator=0;x_response=0;est_x=0
@@ -69,20 +51,6 @@ def sub_attitude_info_handler(attitude_info):
     global est_heading_rad,initial_head,est_heading
     yaw = -attitude_info[0] - yaw_adjustment
     est_heading=yaw+initial_head;est_heading_rad=np.deg2rad(est_heading)
-
-def sendTextViaSocket(message, sock):
-    encodedMessage = bytes(message, 'utf-8')        # encode the text message
-    sock.sendall(encodedMessage)                    # send the data via the socket to the server
-    encodedAckText = sock.recv(1024)                # receive acknowledgment from the server
-    ackText = encodedAckText.decode('utf-8')
-
-    # log if acknowledgment was successful
-    if ackText == ACK_TEXT:
-        print('Server acknowledged reception')
-    else:
-        print('Error: Server returned ' + ackText)
-    
-    return
 
 def sub_distance_handler(dist_info):
     global ir_distance_m
@@ -129,7 +97,7 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
     if abs(head_error)<20:
         z_response = head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z
     else:
-        z_response = (head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z)*.1
+        z_response = (head_error*K_p_z+head_integrator*K_i_z+head_diff*K_d_z)*.5
     if error_count>=len(error_norm)-1:
         error_count=0
     else:
@@ -149,7 +117,6 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
         else:
             return False
 
-
 def find_closet_block():
     yel_range = (np.array([20,120,100]),np.array([50,255,255]),"yellow")
     org_range = (np.array([10,113,180]),np.array([22,255,255]),"orange")
@@ -158,14 +125,24 @@ def find_closet_block():
     # blue_range = (np.array([90,50,76]),np.array([135,255,255]),"blue")
     blue_range = (np.array([100,140,40]),np.array([135,255,255]),"blue")
     item_found = False
-    greatest_y=0;best_range=org_range
+    greatest_y=90;best_range=org_range
     while not item_found:
         for color_range in [org_range,green_range,red_range,yel_range]:
-            for iter_num in range(5):
-                frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+            iter_num=0
+            while iter_num<5:
+                # frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+                try:
+                    frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+                except:
+                    print("Camera Fail {}".format(iter_num))
+                    iter_num = iter_num-2 if iter_num>=4 else iter_num
+                    continue
+                iter_num+=1
                 blurred = cv2.medianBlur(frame,9)
+
                 output = blurred.copy() 
                 hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+                # half_mask = np.zeros(frame.shape[:2], dtype="uint8");half_mask[,]
                 mask = cv2.inRange(hsv, color_range[0], color_range[1])
                 (totalLabels, label_ids, values, centroid) = cv2.connectedComponentsWithStats(mask,4,cv2.CV_32S)
                 for i in range(1, totalLabels):
@@ -196,7 +173,12 @@ def pickup_block(color_range):
     run_bool = True
     greatest_y=0
     while(run_bool):
-        frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+        # frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+        try:
+            frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+        except:
+            print("Camera Fail")
+            continue 
         blurred = cv2.medianBlur(frame,9)
         output = blurred.copy() 
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
@@ -213,7 +195,6 @@ def pickup_block(color_range):
                     componentMask = (label_ids == i).astype("uint8") * 255
                     if centroid[i][1] > greatest_y:
                         greatest_y = centroid[i][1]
-                        best_range = color_range
                         (cX, cY) = centroid[i]
                     cv2.rectangle(img=output, pt1=(round(centroid[i][0]-w/2),round(centroid[i][1]-h/2)),
                                         pt2=(round(centroid[i][0]+w/2),round(centroid[i][1]+h/2)),
@@ -226,7 +207,8 @@ def pickup_block(color_range):
             ep_chassis.drive_speed(.125,0,0,timeout=.25);time.sleep(.25)
             ep_chassis.drive_speed(0,0,0);time.sleep(.1)
             ep_gripper.close();time.sleep(2);ep_gripper.stop()
-            ep_arm.move(0,140).wait_for_completed()
+            # ep_arm.move(0,140).wait_for_completed()
+            act=ep_arm.moveto(75,60);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
             break
 
         ep_chassis.drive_speed(x_response*-1, y_response*1,0,timeout=.5)
@@ -280,8 +262,11 @@ def updateMapLoc(plot_bool=True,update_bool=True,update_path=False,clear_bool=Fa
         elif abs(rounded_heading)==180:
             plt.plot(est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP,'m<') 
 
-        if (ir_distance_m <= 2):
-            objectLoc = [est_x+np.cos(est_heading_rad)*ir_distance_m,est_y-np.sin(est_heading_rad)*ir_distance_m]
+        # if (ir_distance_m <= 2):
+        if (ir_distance_m <= 1.25):
+            d_x=.014;d_y=.01
+            correction_vec = [d_x*np.cos(est_heading_rad)-d_y*np.sin(est_heading_rad), -1*(d_x*np.sin(est_heading_rad)+d_y*np.cos(est_heading_rad))]
+            objectLoc = [est_x+np.cos(est_heading_rad)*ir_distance_m+correction_vec[0],est_y-np.sin(est_heading_rad)*ir_distance_m+correction_vec[1]]
             if (objectLoc[0] > 0 and objectLoc[1] > 0 and int(METERS_TO_MAP*objectLoc[1]) < height and int(METERS_TO_MAP*objectLoc[0]) < width):
                 Dijkstra.SetObstacles(mazeList,[int(METERS_TO_MAP*objectLoc[0]),int(METERS_TO_MAP*objectLoc[1])],2)
     if (update_bool):
@@ -305,33 +290,29 @@ def responseToSpeed():
     robo_y_speed = response_mag*np.sin(alpha_rad+est_heading_rad)
     return robo_x_speed,robo_y_speed
 
+def lookAround(angle1,angle2,num_cycles=2):
+    for iter in range(num_cycles):
+        while not odom_pid(est_x,est_y,angle1,tight=True):
+            # robo_x_speed, robo_y_speed = responseToSpeed()
+            robo_x_speed=0; robo_y_speed = 0
+            ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
+            time.sleep(.01)
+            updateMapLoc(update_bool=False)
+        updateMapLoc()
+        while not odom_pid(est_x,est_y,angle2,tight=True):
+            # robo_x_speed, robo_y_speed = responseToSpeed()
+            robo_x_speed=0; robo_y_speed = 0
+            ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
+            time.sleep(.01)
+            updateMapLoc(update_bool=False)
+        updateMapLoc()
+
 if __name__ == '__main__':
-    # # Open Socket Communication Server
-    # print('Initializing Socket...')
-    # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)    # instantiate a socket object
-    # print('Binding To Socket...')
-    # sock.bind((HOST, PORT))                                     # bind the socket
-    # sock.listen()                                               # start the socket listening
-    # print('Listening To Socket...')
-
-    # # accept the socket response from the client, and get the connection object
-    # conn, addr = sock.accept()      # Note: execution waits here until the client calls sock.connect()
-    # print('Socket Connection Accepted, Received Connection Object')
-
-    # message = input("Message to send: ")
-    # print('Sending: ' + message)
-    # sendTextViaSocket(message, conn)
-
-    mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
-    # mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    # mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     height, width = mazeList.shape
-    # mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 2
     mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
-
-    # start = np.where(mazeList==2)
-    # startLoc = np.array([start[1][0],start[0][0]])
     startLoc = np.array([int(INITIAL_LOC[0]*METERS_TO_MAP),int(INITIAL_LOC[1]*METERS_TO_MAP)])
-    oldxloc = [startLoc[0],startLoc[1],0]
     # Start interactive plot
     plt.ion()
     fig = plt.figure(figsize=(5, 5))
@@ -339,11 +320,8 @@ if __name__ == '__main__':
     Dijkstra.ExpandWalls(mazeList,padding=3,pad_center=False)
     Dijkstra.Draw_Maze(mazeList,ax)
     # Solve Path
-    pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
-    Dijkstra.PlotPath(pathDes)
-    # plt.plot(TEMP_PLACE_LOC[0]*METERS_TO_MAP,-TEMP_PLACE_LOC[1]*METERS_TO_MAP,"b.")
-    plt.plot(BLOCK_PLACE_LOC[0]*METERS_TO_MAP,-BLOCK_PLACE_LOC[1]*METERS_TO_MAP,"bx")
-    plt.plot(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP,-BLOCK_PICKUP_LOC[1]*METERS_TO_MAP,"cx")
+    plt.plot(BLOCK_PLACE_LOC[0]*METERS_TO_MAP,-BLOCK_PLACE_LOC[1]*METERS_TO_MAP,"b")
+    plt.plot(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP,-BLOCK_PICKUP_LOC[1]*METERS_TO_MAP,"c")
     plt.pause(1)
     mazeList[int(INITIAL_LOC[1]*METERS_TO_MAP),int(INITIAL_LOC[0]*METERS_TO_MAP)] = 0
     
@@ -355,16 +333,12 @@ if __name__ == '__main__':
     ep_gripper = ep_robot.gripper
     ep_arm = ep_robot.robotic_arm
     ep_sensor = ep_robot.sensor
-    # ep_robot.chassis.sub_position(freq=50, callback=lambda p: sub_position_handler(p, x_new))
     ep_chassis.sub_position(freq=10, callback=sub_position_handler)
     ep_sensor.sub_distance(freq=10,callback=sub_distance_handler)
     ep_chassis.sub_attitude(freq=10, callback=sub_attitude_info_handler)
     ep_gripper.open()
     ep_arm.moveto(180,-80).wait_for_completed()
     ep_camera.start_video_stream(display=False, resolution=camera.STREAM_360P)
-
-    #x = threading.Thread(target=move_square, daemon=True, args=(ep_robot.chassis,))
-    #x.start()
     
     run_bool=True
     framecount = 1
@@ -376,119 +350,120 @@ if __name__ == '__main__':
         # print("{}   {}".format(est_heading,yaw_adjustment))
         updateMapLoc()
         print("({:.2f},{:.2f},{:.2f})  maze:({:.2f}, {:.2f})".format(est_x,est_y,est_heading,est_x*METERS_TO_MAP,-est_y*METERS_TO_MAP))
+        try:
+            frame = ep_camera.read_cv2_image(strategy="newest", timeout=0.5)  
+        except:
+            print("Camera Fail")
+            continue
+        print(frame.shape)
+        cv2.imshow("out",frame)
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
         # ep_gripper.open();time.sleep(2);ep_gripper.stop()
         # ep_arm.moveto(180,-80).wait_for_completed()
         # color_range = find_closet_block()
         # pickup_block(color_range)
-        time.sleep(.01)
+        # time.sleep(.01)
 
+    if (run_bool):
+        lookAround(-50*ANGLE_SIGN,-110*ANGLE_SIGN)
+        pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+        Dijkstra.PlotPath(pathDes)
+        updateMapLoc(update_path=True)
     while(run_bool): 
         updateMapLoc(framecount%25 == 0,framecount%50 == 0)
-        # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
         if (path_count+2)>len(pathDes):
             updateMapLoc()
-            # MOVE TO PICKUP
-            while(not odom_pid(pathDes[-1][0]/METERS_TO_MAP,pathDes[-1][1]/METERS_TO_MAP,0,tight=False)):
+            # MOVE TO Final point on path
+            while(not odom_pid(pathDes[-1][0]/METERS_TO_MAP,pathDes[-1][1]/METERS_TO_MAP,0 if target=="pickup" else 90*ANGLE_SIGN,tight=True)):
                 robo_x_speed, robo_y_speed = responseToSpeed()
                 ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                 time.sleep(.01)
             updateMapLoc()
             if target =="pickup":
                 # PICKUP BLOCK
-                print("1")
                 ep_chassis.drive_speed(0,0,0,timeout=.1)
-                print("2")
                 color_range = find_closet_block()
-                print("3")
                 pickup_block(color_range)
                 
                 # MOVE BACK TO PICKUP LOCATION
-                # while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179,tight=False)):
-                while(not odom_pid(est_x,est_y,179,tight=False)):
+                while(not odom_pid(BLOCK_PICKUP_LOC[0],BLOCK_PICKUP_LOC[1],179,tight=False)):
+                # while(not odom_pid(est_x,est_y,179,tight=False)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
                     updateMapLoc()
                 
                 # RESET MAP LOCATIONS AND SOLVE TO PLACE
+                updateMapLoc(clear_bool=True)
+                lookAround(135*ANGLE_SIGN,170)
                 mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 0
-                # mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 2
-                # mazeList[int(TEMP_PLACE_LOC[1]*METERS_TO_MAP),int(TEMP_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
                 mazeList[int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
-                # start = np.where(mazeList==2)
-                # startLoc = np.array([start[1][0],start[0][0]])
                 # startLoc = np.array([int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)])
                 startLoc = np.array([int(est_x*METERS_TO_MAP),int(est_y*METERS_TO_MAP)])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
                 path_count=0
                 target = "place"
-                updateMapLoc(clear_bool = True)
+                updateMapLoc(update_path = True)
                 # break
             elif target =="place":
                 updateMapLoc()
-                while(not odom_pid(BLOCK_PLACE_LOC[0],BLOCK_PLACE_LOC[1],179,tight=False)):
+                while(not odom_pid(BLOCK_PLACE_LOC[0],BLOCK_PLACE_LOC[1],90*ANGLE_SIGN,tight=True)):
                     robo_x_speed, robo_y_speed = responseToSpeed()
                     ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
                     time.sleep(.01)
                     updateMapLoc()
-                ep_arm.moveto(220,15).wait_for_completed()
+                # ep_arm.moveto(220,15).wait_for_completed()
+                act=ep_arm.moveto(220,15);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
                 ep_gripper.open();time.sleep(1);ep_gripper.stop()
-                # ep_arm.moveto(180,140).wait_for_completed()
                 print("dropped")
-                ep_chassis.drive_speed(-.25,0,0)
-                time.sleep(1)
+                ep_chassis.drive_speed(-.25,0,0);time.sleep(1)
                 ep_chassis.drive_speed(0,0,0,timeout=.1)
-                ep_arm.moveto(180,-80).wait_for_completed()
-                print("arm moved")
-
+                # ep_arm.moveto(180,-80).wait_for_completed()
+                act=ep_arm.moveto(180,-80);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
                 # RESET MAP LOCATIONS AND SOLVE TO PICKUP
+                updateMapLoc(clear_bool=True)
+                lookAround(-40*ANGLE_SIGN,-80*ANGLE_SIGN)
                 mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3
-                # mazeList[int(TEMP_PICKUP_LOC[1]*METERS_TO_MAP),int(TEMP_PICKUP_LOC[0]*METERS_TO_MAP)] = 2
-                # mazeList[int(TEMP_PLACE_LOC[1]*METERS_TO_MAP),int(TEMP_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
                 mazeList[int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)] = 0 
-                # start = np.where(mazeList==2)
-                # startLoc = np.array([start[1][0],start[0][0]])
                 # startLoc = np.array([int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)])
                 startLoc = np.array([int(est_x*METERS_TO_MAP),int(est_y*METERS_TO_MAP)])
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
                 path_count=0
                 target="pickup"
-                updateMapLoc(clear_bool = True)
+                updateMapLoc(update_path= True)
                 # break
         # Get desired Heading along path
-        # tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-est_x,pathDes[path_count+1][1]/METERS_TO_MAP-est_y]
         tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-pathDes[path_count+0][0]/METERS_TO_MAP,pathDes[path_count+1][1]/METERS_TO_MAP-pathDes[path_count+0][1]/METERS_TO_MAP]
         old_tangent_angle_rad = tangent_angle_rad
         tangent_angle_rad = (-np.arctan2(tangent_vector[1],tangent_vector[0]))
-        # print(np.rad2deg(tangent_angle_rad))
         rounded_tangent = np.rad2deg(tangent_angle_rad+(tangent_angle_rad-old_tangent_angle_rad)/2)
         if abs(rounded_tangent)>180:
             continue
-
         # FOLLOWS PATH
         if odom_pid(pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP,rounded_tangent):
             path_count+=2
-
         robo_x_speed, robo_y_speed = responseToSpeed()
         ep_chassis.drive_speed(-1*robo_x_speed,-1*robo_y_speed,1*z_response,timeout=.1)
         
-        if (framecount%250 == 0):
+        if (framecount%250 == 0): # Recalc dijkstra's
             plt.cla()
             print("Clear")
             Dijkstra.Draw_Maze(mazeList,ax)
-            # Solve Path
-            if (int(METERS_TO_MAP*est_x) < 1 or int(METERS_TO_MAP*est_y) < 1): # Falls outside of the maze
-                pathDes = Dijkstra.Dijkstra(mazeList, [oldxloc[0],oldxloc[1],0])
-            else:
-                oldxloc = [startLoc[0],startLoc[1],0]
-                pathDes = Dijkstra.Dijkstra(mazeList, [int(METERS_TO_MAP*est_x),int(METERS_TO_MAP*est_y),0])
+            try:
+                pathDes = Dijkstra.Dijkstra(mazeList, [int(pathDes[path_count][0]),int(pathDes[path_count][1]),0])
+            except:
+                ep_chassis.drive_speed(-.25,0,0);time.sleep(1);ep_chassis.drive_speed(0,0,0,timeout=.1)
+                startLoc = np.array([int(est_x*METERS_TO_MAP),int(est_y*METERS_TO_MAP)])
+                pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
+            path_count=0
             Dijkstra.PlotPath(pathDes)
             updateMapLoc(update_path=True)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
         time.sleep(.01)
         framecount += 1
+
     # Destroys all of the windows and closes camera  
     print ('Exiting')
     ep_chassis.drive_speed(0,0,0,timeout=.1)
