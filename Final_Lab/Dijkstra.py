@@ -112,7 +112,7 @@ def ExpandWalls(maze,padding,pad_center=True):
                     if h == 0 or w == 0:
                         continue
                     if not pad_center:
-                        if abs(h-center[0])<6 and abs(w-center[1]<6):
+                        if abs(h-center[0])<7 and abs(w-center[1]<10):
                             continue
                     for i in [[-1,-1,1.4142],[0,-1,1.0],[1,-1,1.4142],[-1,0,1.0],[1,0,1.0],[-1,1,1.4142],[0,1,1.0],[1,1,1.4142]]:
                         if maze[h+i[0],w+i[1]] == 0:
@@ -126,7 +126,7 @@ def ExpandWalls(maze,padding,pad_center=True):
 
 def SetObstacles(maze,Loc,padding=1):
     '''
-    Creates a 1 unit wide boundary around all known walls
+    Creates a 1 unit wide boundary around all known obst
     '''
     height, width = maze.shape
     if Loc[0] < 0 or Loc[0] >= width or Loc[1] < 0 or Loc[1] >= height:
@@ -193,7 +193,6 @@ def Draw_Maze(mazelist, ax):
     plt.scatter(Wallx,Wally,c='k',marker='s')
     plt.scatter(Boundx,Boundy,c='#9c9c9c',marker='s')
     plt.scatter(Obstx,Obsty,c='r',marker='s')
-
     ax.axis('equal')
     calcTime = time.time()-startTime
     print('Plot: {} seconds'.format(calcTime))
