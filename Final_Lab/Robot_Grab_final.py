@@ -2,7 +2,7 @@
 CMSC477 - Final Lab
 Robot responsible for picking and transfering blocks over river
 
-TODO: fix out of bounds box
+TODO: error when robot is inside of the keepout-zone and it tries to solve a path
 
 '''
 import cv2
@@ -43,7 +43,7 @@ if TEAM=="top":
     
 elif TEAM=="bot":
     INITIAL_LOC = (4/3.281,13/3.281)
-    BLOCK_PICKUP_LOC = (7/3.281,7.5/3.281)
+    BLOCK_PICKUP_LOC = (6.5/3.281,7.5/3.281)
     BLOCK_PLACE_LOC = (3/3.281,12.5/3.281)
     
     
@@ -383,7 +383,7 @@ if __name__ == '__main__':
         time.sleep(.01)
 
     while(run_bool): 
-        updateMapLoc(framecount%25 == 0,framecount%50 == 0,clear_bool = (framecount%2000 == 0))
+        updateMapLoc(framecount%25 == 0,framecount%50 == 0)
         # if (path_count+1)>len(pathDes) or np.linalg.norm([est_x,est_y]-[pathDes[path_count][0]/METERS_TO_MAP,pathDes[path_count][1]/METERS_TO_MAP])<error_tol:
         if (path_count+2)>len(pathDes):
             updateMapLoc()
@@ -422,7 +422,7 @@ if __name__ == '__main__':
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
                 path_count=0
                 target = "place"
-                updateMapLoc(True,True,True)
+                updateMapLoc(clear_bool = True)
                 # break
             elif target =="place":
                 updateMapLoc()
@@ -435,11 +435,11 @@ if __name__ == '__main__':
                 ep_gripper.open();time.sleep(1);ep_gripper.stop()
                 # ep_arm.moveto(180,140).wait_for_completed()
                 print("dropped")
-                ep_chassis.drive_speed(-.5,0,0)
-                time.sleep(0.25)
+                ep_chassis.drive_speed(-.25,0,0)
+                time.sleep(1)
                 ep_chassis.drive_speed(0,0,0,timeout=.1)
                 ep_arm.moveto(180,-80).wait_for_completed()
-                
+                print("arm moved")
 
                 # RESET MAP LOCATIONS AND SOLVE TO PICKUP
                 mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3
@@ -453,7 +453,7 @@ if __name__ == '__main__':
                 pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
                 path_count=0
                 target="pickup"
-                updateMapLoc(True,True,True)
+                updateMapLoc(clear_bool = True)
                 # break
         # Get desired Heading along path
         # tangent_vector = [pathDes[path_count+1][0]/METERS_TO_MAP-est_x,pathDes[path_count+1][1]/METERS_TO_MAP-est_y]
