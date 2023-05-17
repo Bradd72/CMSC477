@@ -19,12 +19,16 @@ import Dijkstra
 METERS_TO_MAP = 15
 # TEAM = "top"
 TEAM = "bot"
+river_center = True
 if TEAM=="top":
     ANGLE_SIGN = 1
     INITIAL_LOC = (14.5/3.281,2/3.281)
     BLOCK_PICKUP_LOC = (14.5/3.281,6.0/3.281)
     TEMP_PICKUP_LOC = (15/3.281,5.0/3.281)
-    BLOCK_PLACE_LOC = (8.85/3.281-.114,6.5/3.281)
+    if river_center:
+        BLOCK_PLACE_LOC = (8.85/3.281,6.5/3.281)
+    else:
+        BLOCK_PLACE_LOC = (8.85/3.281-.114,6.5/3.281)
     TEMP_PLACE_LOC = (9.5/3.281,6.55/3.281)
     BLOCKER_LOC = (15/3.281,9/3.281)
 elif TEAM=="bot":
@@ -32,7 +36,11 @@ elif TEAM=="bot":
     INITIAL_LOC = (14.5/3.281,12/3.281)
     BLOCK_PICKUP_LOC = (14.5/3.281,8/3.281)
     TEMP_PICKUP_LOC = (15/3.281,9.0/3.281)
-    BLOCK_PLACE_LOC = (8.85/3.281-.114,7.5/3.281)
+    if river_center:
+        BLOCK_PLACE_LOC = (8.85/3.281,7.5/3.281)
+    else:
+        BLOCK_PLACE_LOC = (8.85/3.281-.114,7.5/3.281)
+    BLOCK_PLACE_LOC = (8.85/3.281,7.5/3.281)
     TEMP_PLACE_LOC = (10.4/3.281,7.5/3.281)
     BLOCKER_LOC = (15/3.281,5/3.281)
     # 2.73,2.14

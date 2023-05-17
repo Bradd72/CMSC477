@@ -18,16 +18,23 @@ import Dijkstra
 METERS_TO_MAP = 15
 TEAM = "top"
 # TEAM = "bot"
+river_center = True
 if TEAM=="top":
     ANGLE_SIGN = 1
     INITIAL_LOC = (4/3.281,2/3.281)
-    BLOCK_PICKUP_LOC = (6/3.281,6/3.281)
+    if river_center:
+        BLOCK_PICKUP_LOC = (6/3.281+.114,6/3.281)
+    else:
+        BLOCK_PICKUP_LOC = (6/3.281,6/3.281)
     BLOCK_PLACE_LOC = (2/3.281,3.5/3.281)
     
 elif TEAM=="bot":
     ANGLE_SIGN = -1
     INITIAL_LOC = (4/3.281,12/3.281)
-    BLOCK_PICKUP_LOC = (6/3.281,8/3.281)
+    if river_center:
+        BLOCK_PICKUP_LOC = (6/3.281+.114,8/3.281)
+    else:
+        BLOCK_PICKUP_LOC = (6/3.281,8/3.281)
     BLOCK_PLACE_LOC = (2/3.281,10.75/3.281)
     
 # Centroid PID Globals
