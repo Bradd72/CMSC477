@@ -21,7 +21,8 @@ if __name__ == "__main__":
     leftEdge_BlockZone_from_river_meters = 4/3.281
     width_BlockZone_meters = 0.52
     height_BlockZone_meters = 1.055
-    river_offset_meters = -.114
+    # river_offset_meters = -.114
+    river_offset_meters = 0
     river_width_meters = .85
 
     maze = np.zeros((meter_to_scale(maze_height_meters),meter_to_scale(maze_width_meters)))
