@@ -16,17 +16,17 @@ import Dijkstra
 
 # Map Gobals
 METERS_TO_MAP = 15
-TEAM = "top"
 # TEAM = "bot"
+TEAM = "top"
 river_center = True
 if TEAM=="top":
     ANGLE_SIGN = 1
     INITIAL_LOC = (4/3.281,2/3.281)
     if river_center:
-        BLOCK_PICKUP_LOC = (6/3.281+.114,6/3.281)
+        BLOCK_PICKUP_LOC = (6/3.281+.114,6.5/3.281)
     else:
-        BLOCK_PICKUP_LOC = (6/3.281,6/3.281)
-    BLOCK_PLACE_LOC = (2/3.281,3.5/3.281)
+        BLOCK_PICKUP_LOC = (6/3.281,6.5/3.281)
+    BLOCK_PLACE_LOC = (2/3.281,3.25/3.281)
     
 elif TEAM=="bot":
     ANGLE_SIGN = -1
@@ -125,6 +125,7 @@ def odom_pid(des_X,des_Y,des_head,tight=False):
             return False
 
 def find_closet_block():
+    global cX,cY
     yel_range = (np.array([20,120,100]),np.array([50,255,255]),"yellow")
     org_range = (np.array([10,113,180]),np.array([22,255,255]),"orange")
     green_range = (np.array([65,105,75]),np.array([83,255,255]),"green")
@@ -164,6 +165,7 @@ def find_closet_block():
                                 item_found = True
                                 print("y:{:.2f} c:{}".format(greatest_y,color_range[2]))
                                 greatest_y = centroid[i][1]
+                                (cX, cY) = centroid[i]
                                 best_range = color_range
                             cv2.circle(output, (int(centroid[i][0]), int(centroid[i][1])), 4, (0, 0, 255), -1)
             
@@ -315,8 +317,8 @@ def lookAround(angle1,angle2,num_cycles=2):
         updateMapLoc()
 
 if __name__ == '__main__':
-    # mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
-    mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    mazeList = pd.read_csv("Labs\Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
+    #mazeList = pd.read_csv("Final_Lab\Final_Lab_maze2.csv", header=None).to_numpy() # mazelist[y,x]
     height, width = mazeList.shape
     mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3     # mazeList[y,x]
     startLoc = np.array([int(INITIAL_LOC[0]*METERS_TO_MAP),int(INITIAL_LOC[1]*METERS_TO_MAP)])
@@ -373,7 +375,7 @@ if __name__ == '__main__':
         # time.sleep(.01)
 
     if (run_bool):
-        lookAround(-50*ANGLE_SIGN,-110*ANGLE_SIGN)
+        lookAround(-50*ANGLE_SIGN,-110*ANGLE_SIGN,num_cycles=1)
         pathDes = Dijkstra.Dijkstra(mazeList, [startLoc[0],startLoc[1],0])
         Dijkstra.PlotPath(pathDes)
         updateMapLoc(update_path=True)
@@ -403,7 +405,7 @@ if __name__ == '__main__':
                 
                 # RESET MAP LOCATIONS AND SOLVE TO PLACE
                 updateMapLoc(clear_bool=True)
-                lookAround(135*ANGLE_SIGN,170)
+                lookAround(135*ANGLE_SIGN,170,num_cycles=1)
                 mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 0
                 mazeList[int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)] = 3 
                 # startLoc = np.array([int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)])
@@ -430,7 +432,7 @@ if __name__ == '__main__':
                 act=ep_arm.moveto(180,-80);time.sleep(1);act._state='action_succeeded';ep_arm._action_dispatcher._in_progress = {}
                 # RESET MAP LOCATIONS AND SOLVE TO PICKUP
                 updateMapLoc(clear_bool=True)
-                lookAround(-40*ANGLE_SIGN,-80*ANGLE_SIGN)
+                lookAround(-40*ANGLE_SIGN,-80*ANGLE_SIGN,num_cycles=1)
                 mazeList[int(BLOCK_PICKUP_LOC[1]*METERS_TO_MAP),int(BLOCK_PICKUP_LOC[0]*METERS_TO_MAP)] = 3
                 mazeList[int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)] = 0 
                 # startLoc = np.array([int(BLOCK_PLACE_LOC[1]*METERS_TO_MAP),int(BLOCK_PLACE_LOC[0]*METERS_TO_MAP)])
